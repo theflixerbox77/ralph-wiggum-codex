@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ralph Wiggum Codex"
+  short_description: "Codex iterative loop runner with guardrails"
+  default_prompt: "Use $ralph-wiggum-codex to run an iterative coding loop with validation gates and resumable state."

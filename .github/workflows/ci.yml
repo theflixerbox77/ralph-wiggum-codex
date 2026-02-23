@@ -1,0 +1,15 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bash syntax check
+        run: bash -n skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh
+      - name: Smoke tests
+        run: tests/smoke.sh
