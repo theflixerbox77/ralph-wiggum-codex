@@ -1,33 +1,35 @@
 # Harness Principles Applied In This Skill
 
-This skill encodes practical harness-engineering ideas for Codex loops.
+This skill applies harness-engineering principles to long-running Codex work.
 
 ## 1) Repository Is The System Of Record
 
-- Loop prompts can include `--source-of-truth` files/URLs.
-- Operators anchor each run to explicit artifacts instead of memory.
+- Objective and feedback live in repo-local files (`objective.md`, `feedback.md`).
+- Optional `--source-of-truth` artifacts anchor behavior to explicit references.
 
 ## 2) Legibility Over Guessing
 
-- State, prompt, events, and summary are written to deterministic files.
-- Validation commands generate per-iteration logs.
+- Deterministic run artifacts: `state.env`, `events.log`, `run-summary.md`.
+- Iteration memory (`iteration-history.md`) captures recent outcomes and model output tails.
+- Validation logs are written per iteration.
 
-## 3) Enforce Invariants, Don’t Micromanage
+## 3) Fast Feedback Loops
 
-- Invariant: completion requires exact promise output.
-- Invariant: completion is rejected when validation fails.
-- Invariant: only one loop process can hold the lock.
-
-## 4) Fast Feedback Loops
-
-Recommended order:
+Preferred loop order:
 
 1. Preflight checks (`--preflight-cmd`)
-2. Validation checks (`--validate-cmd`)
-3. Operator smoke checks (summary and event logs)
+2. Iteration validation (`--validate-cmd`)
+3. Adaptive steering via `feedback.md` and `auto-feedback.md`
 
-## 5) Entropy Control
+## 4) Enforce Invariants Without Micromanagement
 
-- `state.env` keeps runs resumable instead of ad-hoc restarts.
-- `events.log` preserves execution history for post-run cleanup and tuning.
-- `STOP` sentinel provides controlled interruption rather than force-kill.
+- Completion can require exact promise output.
+- Completion is rejected if validation fails.
+- Single active loop via lock directory.
+- Stagnation guard ends repeated no-progress cycles.
+
+## 5) Entropy Control For Long Runs
+
+- Resumable state avoids ad-hoc restarts.
+- Objective and feedback reloading allow controlled mid-run adaptation.
+- Auto feedback surfaces failure patterns to improve subsequent iterations.

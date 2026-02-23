@@ -1,28 +1,30 @@
 # Ralph Wiggum Codex Skill
 
-Ralph-style autonomous iteration for Codex with harness-grade safety controls.
+Ralph-style long-running autonomous refinement for Codex, packaged as an installable skill.
 
-`ralph-wiggum-codex` is an installable Codex skill that runs repeatable `codex exec` loops with explicit completion contracts, validation gates, resumable state, and drift-resistant operational guardrails.
+`ralph-wiggum-codex` is a Codex skill for iterative coding loops that continuously refine work until validation passes and completion criteria are met.
 
-## Why This Exists
+## What This Is
 
-Claude Code plugins use `.claude-plugin` hooks that Codex does not support. This project adapts the Ralph loop concept to Codex natively via an external orchestration script.
+This is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a Codex-native skill with:
+- `SKILL.md` instructions for skill invocation
+- optional `agents/openai.yaml` metadata and invocation policy
+- a deterministic loop runner script used by the skill for reliable long runs
 
-## Features
+## Core Capabilities
 
-- Iterative Codex loop execution against a stable objective
-- Exact completion promise matching (`<promise>...</promise>`)
-- Preflight checks before expensive runs (`--preflight-cmd`)
-- Validation loop after each iteration (`--validate-cmd`)
-- Resumable state (`--resume`)
-- Failure budget (`--max-consecutive-failures`)
-- Operator stop sentinel (`STOP` file)
-- Locking to avoid concurrent loop collisions
-- Harness-inspired source-of-truth anchoring (`--source-of-truth`)
+- Multi-iteration implement -> validate -> refine loops
+- Strict completion contracts via `<promise>...</promise>`
+- Dynamic objective reloading (`--objective-file`)
+- Live steering feedback reloading (`--feedback-file`)
+- Auto corrective feedback generation on failures
+- Iteration memory (`iteration-history.md`) fed back into future iterations
+- Stagnation detection (`--max-stagnant-iterations`)
+- Resume support and single-run locking
 
-## Install (Codex Skill Installer)
+## Install
 
-Run:
+### Option 1: Codex Skill Installer (recommended)
 
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
@@ -30,31 +32,50 @@ python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-githu
   --path skills/ralph-wiggum-codex
 ```
 
-Then restart Codex.
+Restart Codex after install.
 
-## Manual Install
+### Option 2: Manual Install
 
 ```bash
 mkdir -p ~/.codex/skills
 cp -R skills/ralph-wiggum-codex ~/.codex/skills/
 ```
 
-Then restart Codex.
+Restart Codex after install.
 
-## Quick Start
+## Use It As A Skill (Primary)
+
+This skill is configured for explicit invocation (`allow_implicit_invocation: false`), so call it directly:
+
+```text
+$ralph-wiggum-codex
+Run this in /path/to/repo.
+Objective: implement X with tests.
+Validation:
+- npm run lint
+- npm run test
+Completion promise: DONE
+Max iterations: 40
+Max stagnant iterations: 6
+```
+
+The skill will set up and run the loop under `.codex/ralph-loop/`.
+
+## Advanced: Run The Engine Script Directly
 
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /path/to/repo \
-  --prompt "Implement feature X with tests" \
-  --source-of-truth docs/spec.md \
+  --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
+  --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
   --completion-promise "DONE" \
-  --max-iterations 20 \
+  --max-iterations 40 \
+  --max-stagnant-iterations 6 \
   --validate-cmd "npm run lint" \
-  --validate-cmd "npm run build"
+  --validate-cmd "npm run test"
 ```
 
-## Resume
+Resume:
 
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
@@ -62,36 +83,44 @@ Then restart Codex.
   --resume
 ```
 
-## Stop a Running Loop
+Stop:
 
 ```bash
 touch /path/to/repo/.codex/ralph-loop/STOP
 ```
 
-## Key Output Files
+## Run Artifacts
 
 - `.codex/ralph-loop/state.env`
 - `.codex/ralph-loop/events.log`
+- `.codex/ralph-loop/iteration-history.md`
+- `.codex/ralph-loop/feedback.md`
+- `.codex/ralph-loop/auto-feedback.md`
 - `.codex/ralph-loop/last-message.txt`
 - `.codex/ralph-loop/run-summary.md`
-- `.codex/ralph-loop/validation/` logs
+- `.codex/ralph-loop/validation/`
 
-## Operational Guidance
+## Repo Structure
 
-- Always use finite `--max-iterations` for unattended runs.
-- Treat `--source-of-truth` as required for non-trivial tasks.
-- Treat `--validate-cmd` as required for production-bound changes.
-- Avoid `--dangerous` unless running in a fully trusted environment.
+```text
+skills/ralph-wiggum-codex/
+  SKILL.md
+  agents/openai.yaml
+  scripts/ralph-loop-codex.sh
+  references/
+    harness-principles.md
+    runbook.md
+```
+
+## CI
+
+This repo runs:
+- Bash syntax check for the loop runner
+- Smoke tests in `tests/smoke.sh`
 
 ## Search Keywords
 
-Codex skill, autonomous coding loop, iterative coding agent, coding agent harness, AI coding automation, Ralph loop for Codex, agentic development workflow.
-
-## Skill Path
-
-Skill lives at:
-
-`skills/ralph-wiggum-codex`
+Codex skill, autonomous coding loop, iterative coding agent, long-running coding workflow, agentic refinement loop, Ralph loop Codex, coding harness.
 
 ## License
 

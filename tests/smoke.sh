@@ -42,12 +42,16 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 repo_dir="$tmp_dir/repo"
 mkdir -p "$repo_dir"
+objective_file="$tmp_dir/objective.md"
+printf 'Implement feature X with tests\n' > "$objective_file"
 
 expect_success "script is executable" test -x "$SCRIPT"
 expect_success "help works" bash -lc "'$SCRIPT' --help >/dev/null"
 expect_failure "missing prompt fails" bash -lc "'$SCRIPT' --cwd '$repo_dir' --dry-run >/dev/null 2>&1"
 expect_failure "invalid autonomy level fails" bash -lc "'$SCRIPT' --cwd '$repo_dir' --prompt 'x' --autonomy-level bad --dry-run >/dev/null 2>&1"
+expect_failure "invalid max stagnant iterations fails" bash -lc "'$SCRIPT' --cwd '$repo_dir' --prompt 'x' --max-stagnant-iterations nope --dry-run >/dev/null 2>&1"
 expect_success "dry-run config works" bash -lc "'$SCRIPT' --cwd '$repo_dir' --prompt 'x' --completion-promise 'DONE' --max-iterations 2 --dry-run >/dev/null"
+expect_success "objective file dry-run works" bash -lc "'$SCRIPT' --cwd '$repo_dir' --objective-file '$objective_file' --dry-run >/dev/null"
 expect_failure "resume without state fails" bash -lc "'$SCRIPT' --cwd '$repo_dir' --resume >/dev/null 2>&1"
 
 printf '\nSmoke tests complete: %s passed, %s failed\n' "$pass_count" "$fail_count"

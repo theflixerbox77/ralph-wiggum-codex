@@ -1,4 +1,7 @@
 interface:
   display_name: "Ralph Wiggum Codex"
-  short_description: "Codex iterative loop runner with guardrails"
-  default_prompt: "Use $ralph-wiggum-codex to run an iterative coding loop with validation gates and resumable state."
+  short_description: "Long-running autonomous refinement loop for Codex tasks"
+  default_prompt: "Use $ralph-wiggum-codex to run an iterative refinement loop with objective/feedback files, validation checks, and explicit completion criteria."
+
+policy:
+  allow_implicit_invocation: false

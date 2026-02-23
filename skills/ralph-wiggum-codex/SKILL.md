@@ -1,52 +1,98 @@
 ---
 name: ralph-wiggum-codex
-description: Use when running Ralph-style iterative autonomous coding loops in Codex with explicit stop conditions, validation gates, resumable state, and harness-style safeguards for repository integrity.
+description: Use when a coding task needs multi-iteration autonomous refinement with explicit completion criteria, validation commands, resumable loop state, and long-running progress control.
 ---
 
 # Ralph Wiggum For Codex
 
-Codex-native adaptation of the Ralph loop pattern.
+Codex-native long-running refinement loop.
 
-Claude Code plugins rely on `.claude-plugin` hooks that Codex does not support. This skill provides equivalent behavior through a deterministic loop runner around `codex exec`.
+This skill is designed to be invoked as a Codex skill (`$ralph-wiggum-codex`).
+The loop runner script is an internal execution engine for the skill, not the primary user-facing entrypoint.
 
-## Core Behavior
+## When To Use
 
-- Re-run Codex on the same objective across iterations.
-- Persist state and logs under `.codex/ralph-loop`.
-- Stop only when a strict completion contract is met, or when guardrails trigger.
+Use this skill when:
+- The task is unlikely to finish in one turn.
+- You need repeated implement -> validate -> refine cycles.
+- You want strict completion signaling (`<promise>...</promise>`) and resumable state.
+- You need unattended or semi-attended long-running execution with drift resistance.
 
-## Guardrails (Harness-Style)
+Do not use this skill when:
+- The request is a quick one-shot edit or explanation.
+- No meaningful validation loop exists.
+- The user wants manual step-by-step control each turn.
 
-- Preflight checks before first iteration.
-- Source-of-truth references to reduce drift.
-- Validation loop (`--validate-cmd`) after each iteration.
-- Failure budget (`--max-consecutive-failures`).
-- Stop sentinel file for operator intervention.
-- Lock directory to prevent concurrent loop collisions.
+## Skill-First Operating Contract
 
-## Quick Start
+When this skill is invoked, execute this flow:
+
+1. Collect or infer:
+- `cwd`
+- Objective text
+- Validation commands (fastest checks first)
+- Completion promise (if strict completion is required)
+- Runtime caps (`max-iterations`, `max-stagnant-iterations`)
+
+2. Prepare loop files under `<cwd>/.codex/ralph-loop/`:
+- `objective.md` (objective to reload every iteration)
+- `feedback.md` (optional operator steering)
+
+3. Start the loop runner with objective/feedback files and validations.
+
+4. Monitor run artifacts (`events.log`, `run-summary.md`, `iteration-history.md`, validation logs) and report concise progress.
+
+5. If blocked, update `feedback.md` with corrective guidance and continue (`--resume`) instead of restarting from scratch.
+
+## Execution Command Template
 
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /path/to/repo \
-  --prompt "Implement feature X with tests" \
+  --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
+  --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
   --completion-promise "DONE" \
-  --max-iterations 20 \
+  --max-iterations 40 \
+  --max-stagnant-iterations 6 \
   --validate-cmd "npm run lint" \
-  --validate-cmd "npm run build"
+  --validate-cmd "npm run test"
 ```
 
-## Suggested Operating Pattern
+## Long-Run Refinement Features
 
-1. Declare source-of-truth files (`spec`, `plan`, `requirements`).
-2. Add at least one validation command.
-3. Set a concrete completion promise.
-4. Set a finite max-iteration cap.
-5. Monitor `events.log` and `run-summary.md`.
+The runner supports long-running autonomy with iterative correction:
+- Dynamic objective reload each iteration (`--objective-file`)
+- Live operator feedback ingestion (`--feedback-file`)
+- Auto-generated corrective feedback when codex/validation fails (`auto-feedback.md`)
+- Iteration memory (`iteration-history.md`) injected into future prompts
+- Stagnation detection (`--max-stagnant-iterations`)
+- Resumable state and lock-based single-run protection
 
-## Resume and Stop
+## Output Contract
 
-Resume an interrupted run:
+If `--completion-promise` is set, completion is accepted only when model output is exactly:
+
+```xml
+<promise>YOUR_PROMISE</promise>
+```
+
+Any extra text invalidates completion. If validations fail, completion is rejected and the loop continues.
+
+## Core Files
+
+- `.codex/ralph-loop/state.env`
+- `.codex/ralph-loop/prompt.txt`
+- `.codex/ralph-loop/events.log`
+- `.codex/ralph-loop/iteration-history.md`
+- `.codex/ralph-loop/feedback.md`
+- `.codex/ralph-loop/auto-feedback.md`
+- `.codex/ralph-loop/last-message.txt`
+- `.codex/ralph-loop/run-summary.md`
+- `.codex/ralph-loop/validation/`
+
+## Resume And Stop
+
+Resume:
 
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
@@ -54,37 +100,11 @@ Resume an interrupted run:
   --resume
 ```
 
-Stop a running loop:
+Stop safely:
 
 ```bash
 touch /path/to/repo/.codex/ralph-loop/STOP
 ```
-
-## Output Contract
-
-When completion promise is set, the loop only accepts exact output:
-
-```xml
-<promise>YOUR_PROMISE</promise>
-```
-
-Any additional text invalidates completion. If validations fail, completion is rejected and the loop continues.
-
-## Key Files
-
-- State: `.codex/ralph-loop/state.env`
-- Prompt: `.codex/ralph-loop/prompt.txt`
-- Iteration events: `.codex/ralph-loop/events.log`
-- Last model output: `.codex/ralph-loop/last-message.txt`
-- Final summary: `.codex/ralph-loop/run-summary.md`
-
-## Recommended Flags
-
-- `--source-of-truth <path-or-url>`: anchor decisions to canonical artifacts.
-- `--validate-cmd <command>`: enforce objective evidence.
-- `--preflight-cmd <command>`: fail fast before expensive loops.
-- `--autonomy-level <l0|l1|l2|l3>`: annotate risk profile.
-- `--sandbox <mode>`: explicit safety control.
 
 ## References
 

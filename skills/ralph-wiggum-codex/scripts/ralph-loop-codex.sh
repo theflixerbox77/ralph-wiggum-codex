@@ -4,28 +4,34 @@ set -euo pipefail
 SCRIPT_NAME="ralph-loop-codex.sh"
 DEFAULT_MAX_ITERATIONS=20
 DEFAULT_MAX_CONSECUTIVE_FAILURES=3
+DEFAULT_MAX_STAGNANT_ITERATIONS=6
 
 usage() {
   cat <<'USAGE'
 Ralph Loop for Codex
 
-Run iterative Codex execution loops with guardrails, validation checks, and resumable state.
+Run iterative Codex execution loops with validation checks, adaptive feedback, and resumable state.
 
 Usage:
   ralph-loop-codex.sh --cwd <dir> --prompt "text" [options]
   ralph-loop-codex.sh --cwd <dir> --prompt-file <file> [options]
+  ralph-loop-codex.sh --cwd <dir> --objective-file <file> [options]
   ralph-loop-codex.sh --cwd <dir> --resume [options]
 
 Core options:
   --cwd <dir>                      Repository/workspace to run Codex in (required)
-  --prompt <text>                  Task prompt (required unless --prompt-file/--resume)
+  --prompt <text>                  Task prompt (required unless --prompt-file/--objective-file/--resume)
   --prompt-file <file>             File containing task prompt
+  --objective-file <file>          File with objective text; reloaded every iteration
+  --feedback-file <file>           Optional operator feedback file read each iteration
   --resume                          Resume from existing state in --state-dir
   --state-dir <dir>                State directory (default: <cwd>/.codex/ralph-loop)
   --completion-promise <text>      Stop only when exact output is <promise>text</promise>
   --max-iterations <n>             Stop after n iterations (default: 20, 0 = unbounded)
   --allow-unbounded                Allow infinite run only when max-iterations=0
   --max-consecutive-failures <n>   Stop after n consecutive codex failures (default: 3)
+  --max-stagnant-iterations <n>    Stop after n repeated outputs (default: 6, 0 = disabled)
+  --sleep-seconds <n>              Sleep between iterations (default: 0)
 
 Harness and safety options:
   --autonomy-level <l0|l1|l2|l3>   Risk profile label (default: l2)
@@ -112,6 +118,8 @@ cwd=""
 state_dir=""
 state_file=""
 prompt_file_saved=""
+history_file=""
+auto_feedback_file=""
 validate_file=""
 preflight_file=""
 source_of_truth_file=""
@@ -124,13 +132,17 @@ lock_dir=""
 
 prompt=""
 prompt_file=""
+objective_file=""
+feedback_file=""
 completion_promise=""
 max_iterations="$DEFAULT_MAX_ITERATIONS"
 max_consecutive_failures="$DEFAULT_MAX_CONSECUTIVE_FAILURES"
+max_stagnant_iterations="$DEFAULT_MAX_STAGNANT_ITERATIONS"
 autonomy_level="l2"
 sandbox=""
 model=""
 profile=""
+sleep_seconds=0
 
 resume=0
 allow_unbounded=0
@@ -146,6 +158,10 @@ provided_source_of_truth=0
 provided_codex_arg=0
 provided_autonomy=0
 provided_sandbox=0
+provided_objective_file=0
+provided_feedback_file=0
+provided_max_stagnant_iterations=0
+provided_sleep_seconds=0
 
 validate_cmds=()
 preflight_cmds=()
@@ -155,6 +171,8 @@ codex_extra_args=()
 active=1
 iteration=1
 consecutive_failures=0
+stagnant_iterations=0
+last_output_hash=""
 started_at=""
 last_event_at=""
 stop_reason=""
@@ -177,6 +195,16 @@ while [[ $# -gt 0 ]]; do
       prompt_file="${2:-}"
       shift 2
       ;;
+    --objective-file)
+      objective_file="${2:-}"
+      provided_objective_file=1
+      shift 2
+      ;;
+    --feedback-file)
+      feedback_file="${2:-}"
+      provided_feedback_file=1
+      shift 2
+      ;;
     --completion-promise)
       completion_promise="${2:-}"
       provided_completion_promise=1
@@ -189,6 +217,16 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-consecutive-failures)
       max_consecutive_failures="${2:-}"
+      shift 2
+      ;;
+    --max-stagnant-iterations)
+      max_stagnant_iterations="${2:-}"
+      provided_max_stagnant_iterations=1
+      shift 2
+      ;;
+    --sleep-seconds)
+      sleep_seconds="${2:-}"
+      provided_sleep_seconds=1
       shift 2
       ;;
     --autonomy-level)
@@ -272,6 +310,8 @@ fi
 
 state_file="$state_dir/state.env"
 prompt_file_saved="$state_dir/prompt.txt"
+history_file="$state_dir/iteration-history.md"
+auto_feedback_file="$state_dir/auto-feedback.md"
 validate_file="$state_dir/validate-cmds.txt"
 preflight_file="$state_dir/preflight-cmds.txt"
 source_of_truth_file="$state_dir/source-of-truth.txt"
@@ -282,6 +322,10 @@ summary_file="$state_dir/run-summary.md"
 
 if [[ -z "$stop_file" ]]; then
   stop_file="$state_dir/STOP"
+fi
+
+if [[ -z "$feedback_file" ]]; then
+  feedback_file="$state_dir/feedback.md"
 fi
 
 lock_dir="$state_dir/.lock"
@@ -300,6 +344,14 @@ fi
 
 if ! [[ "$max_consecutive_failures" =~ ^[0-9]+$ ]] || [[ "$max_consecutive_failures" -lt 1 ]]; then
   die "--max-consecutive-failures must be an integer >= 1"
+fi
+
+if ! [[ "$max_stagnant_iterations" =~ ^[0-9]+$ ]]; then
+  die "--max-stagnant-iterations must be an integer >= 0"
+fi
+
+if ! [[ "$sleep_seconds" =~ ^[0-9]+$ ]]; then
+  die "--sleep-seconds must be an integer >= 0"
 fi
 
 if [[ "$resume" -eq 1 ]]; then
@@ -326,8 +378,24 @@ if [[ "$resume" -eq 1 ]]; then
     autonomy_level="${AUTONOMY_LEVEL:-l2}"
   fi
 
+  if [[ "$provided_objective_file" -eq 0 ]]; then
+    objective_file="${OBJECTIVE_FILE:-}"
+  fi
+
+  if [[ "$provided_feedback_file" -eq 0 ]]; then
+    feedback_file="${FEEDBACK_FILE:-$feedback_file}"
+  fi
+
   if [[ "$provided_sandbox" -eq 0 ]]; then
     sandbox="${SANDBOX:-}"
+  fi
+
+  if [[ "$provided_max_stagnant_iterations" -eq 0 ]]; then
+    max_stagnant_iterations="${MAX_STAGNANT_ITERATIONS:-$DEFAULT_MAX_STAGNANT_ITERATIONS}"
+  fi
+
+  if [[ "$provided_sleep_seconds" -eq 0 ]]; then
+    sleep_seconds="${SLEEP_SECONDS:-0}"
   fi
 
   if [[ -z "$model" ]]; then
@@ -340,6 +408,8 @@ if [[ "$resume" -eq 1 ]]; then
 
   iteration="${ITERATION:-1}"
   consecutive_failures="${CONSECUTIVE_FAILURES:-0}"
+  stagnant_iterations="${STAGNANT_ITERATIONS:-0}"
+  last_output_hash="${LAST_OUTPUT_HASH:-}"
   started_at="${STARTED_AT:-$(now_utc)}"
   run_id="${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 
@@ -358,12 +428,17 @@ if [[ "$resume" -eq 1 ]]; then
 
   note "Resuming run: $run_id (starting at iteration $iteration)"
 else
-  [[ -n "$prompt" || -n "$prompt_file" ]] || die "Provide --prompt or --prompt-file"
+  [[ -n "$prompt" || -n "$prompt_file" || -n "$objective_file" ]] || die "Provide --prompt, --prompt-file, or --objective-file"
   [[ -z "$prompt" || -z "$prompt_file" ]] || die "Use only one of --prompt or --prompt-file"
 
   if [[ -n "$prompt_file" ]]; then
     [[ -f "$prompt_file" ]] || die "--prompt-file does not exist: $prompt_file"
     prompt="$(cat "$prompt_file")"
+  fi
+
+  if [[ -n "$objective_file" ]]; then
+    [[ -f "$objective_file" ]] || die "--objective-file does not exist: $objective_file"
+    prompt="$(cat "$objective_file")"
   fi
 
   [[ -n "$prompt" ]] || die "Prompt is empty"
@@ -383,6 +458,8 @@ else
   started_at="$(now_utc)"
   iteration=1
   consecutive_failures=0
+  stagnant_iterations=0
+  last_output_hash=""
 fi
 
 mkdir -p "$state_dir"
@@ -415,8 +492,10 @@ save_state() {
 ACTIVE=$active
 ITERATION=$iteration
 CONSECUTIVE_FAILURES=$consecutive_failures
+STAGNANT_ITERATIONS=$stagnant_iterations
 MAX_ITERATIONS=$max_iterations
 MAX_CONSECUTIVE_FAILURES=$max_consecutive_failures
+MAX_STAGNANT_ITERATIONS=$max_stagnant_iterations
 AUTONOMY_LEVEL=$autonomy_level
 SANDBOX=$(printf '%q' "$sandbox")
 MODEL=$(printf '%q' "$model")
@@ -424,7 +503,11 @@ PROFILE=$(printf '%q' "$profile")
 RUN_ID=$(printf '%q' "$run_id")
 STARTED_AT=$(printf '%q' "$started_at")
 LAST_EVENT_AT=$(printf '%q' "$last_event_at")
+LAST_OUTPUT_HASH=$(printf '%q' "$last_output_hash")
 COMPLETION_PROMISE_B64=$(printf '%q' "$promise_b64")
+OBJECTIVE_FILE=$(printf '%q' "$objective_file")
+FEEDBACK_FILE=$(printf '%q' "$feedback_file")
+SLEEP_SECONDS=$sleep_seconds
 EOF_STATE
 }
 
@@ -440,10 +523,14 @@ write_summary() {
 - Stop reason: $reason
 - Final iteration: $iteration
 - Consecutive failures: $consecutive_failures
+- Stagnant iterations: $stagnant_iterations
 - Working directory: $cwd
 - State directory: $state_dir
 - Events log: $events_file
 - Last message: $last_message_file
+- Iteration history: $history_file
+- Feedback file: $feedback_file
+- Auto feedback file: $auto_feedback_file
 
 ## Configuration
 
@@ -452,6 +539,9 @@ write_summary() {
 - Max iterations: $max_iterations
 - Completion promise: ${completion_promise:-"(none)"}
 - Max consecutive failures: $max_consecutive_failures
+- Max stagnant iterations: $max_stagnant_iterations
+- Sleep seconds: $sleep_seconds
+- Objective file: ${objective_file:-"(none)"}
 
 ## Validation commands
 $(if [[ ${#validate_cmds[@]} -eq 0 ]]; then echo '- (none)'; else printf -- '- `%s`\n' "${validate_cmds[@]}"; fi)
@@ -483,6 +573,121 @@ build_validation_block() {
   for item in "${validate_cmds[@]}"; do
     printf -- '- %s\n' "$item"
   done
+}
+
+hash_text() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+    return
+  fi
+  shasum -a 256 | awk '{print $1}'
+}
+
+resolve_objective() {
+  local current_objective="$prompt"
+
+  if [[ -n "$objective_file" ]]; then
+    if [[ -f "$objective_file" ]]; then
+      current_objective="$(cat "$objective_file")"
+      current_objective="$(trim_ws "$current_objective")"
+      [[ -n "$current_objective" ]] || die "--objective-file is empty: $objective_file"
+    else
+      warn "Objective file not found during iteration: $objective_file (using last known objective)"
+    fi
+  fi
+
+  printf '%s' "$current_objective"
+}
+
+build_feedback_block() {
+  local has_feedback=0
+
+  if [[ -f "$feedback_file" && -s "$feedback_file" ]]; then
+    has_feedback=1
+    printf 'Operator feedback (%s):\n' "$feedback_file"
+    tail -n 80 "$feedback_file"
+    printf '\n'
+  fi
+
+  if [[ -f "$auto_feedback_file" && -s "$auto_feedback_file" ]]; then
+    has_feedback=1
+    printf 'Auto feedback (%s):\n' "$auto_feedback_file"
+    tail -n 80 "$auto_feedback_file"
+    printf '\n'
+  fi
+
+  if [[ "$has_feedback" -eq 0 ]]; then
+    printf '%s\n' '- (none)'
+  fi
+}
+
+build_recent_history_block() {
+  if [[ -f "$history_file" ]]; then
+    tail -n 120 "$history_file"
+    return
+  fi
+
+  printf '%s\n' '- (no prior iteration memory yet)'
+}
+
+append_iteration_history() {
+  local codex_status="$1"
+  local validation_status="$2"
+  local completion_status="$3"
+
+  {
+    printf '%s\n' '---'
+    printf 'iteration=%s timestamp=%s codex_exit=%s validation=%s completion=%s stagnant=%s\n' \
+      "$iteration" "$(now_utc)" "$codex_status" "$validation_status" "$completion_status" "$stagnant_iterations"
+    printf 'objective_file=%s feedback_file=%s\n' "${objective_file:-"(none)"}" "$feedback_file"
+    printf 'last_message_tail:\n'
+    if [[ -f "$last_message_file" ]]; then
+      tail -n 60 "$last_message_file"
+    else
+      printf '%s\n' '(none)'
+    fi
+    printf '%s\n\n' ''
+  } >> "$history_file"
+}
+
+refresh_auto_feedback() {
+  local codex_status="$1"
+  local validation_status="$2"
+  local completion_status="$3"
+
+  if [[ "$completion_status" == "yes" ]]; then
+    rm -f "$auto_feedback_file"
+    return
+  fi
+
+  if [[ "$codex_status" != "0" ]]; then
+    cat > "$auto_feedback_file" <<EOF_AUTO
+Codex execution failed in iteration $iteration (exit=$codex_status).
+- Inspect .codex/ralph-loop/events.log for context.
+- Resolve tool/runtime failure first.
+- Do not repeat the same command path without changes.
+EOF_AUTO
+    return
+  fi
+
+  if [[ "$validation_status" != "pass" ]]; then
+    cat > "$auto_feedback_file" <<EOF_AUTO
+Validation failed in iteration $iteration.
+- Inspect .codex/ralph-loop/validation/iteration-$iteration/ logs.
+- Fix failing checks before claiming completion.
+- Prefer the smallest concrete change that turns checks green.
+EOF_AUTO
+    return
+  fi
+
+  rm -f "$auto_feedback_file"
+}
+
+pause_between_iterations() {
+  if [[ "$sleep_seconds" -gt 0 ]]; then
+    note "Sleeping $sleep_seconds second(s) before next iteration"
+    sleep "$sleep_seconds"
+  fi
 }
 
 run_cmd_in_cwd() {
@@ -564,6 +769,12 @@ build_iteration_prompt() {
   local validation_block
   validation_block="$(build_validation_block)"
 
+  local feedback_block
+  feedback_block="$(build_feedback_block)"
+
+  local recent_history_block
+  recent_history_block="$(build_recent_history_block)"
+
   local completion_contract
   if [[ -n "$completion_promise" ]]; then
     completion_contract="- If and only if all requirements are satisfied and validations pass, respond with EXACTLY: <promise>$completion_promise</promise>"
@@ -584,12 +795,19 @@ $prompt
 
 Operating invariants:
 - Follow source-of-truth artifacts over assumptions.
-- Make the smallest safe change that advances objective completion.
+- Make the smallest effective change that advances objective completion.
 - Preserve repository integrity (correctness, maintainability, explicit errors).
 - Surface blockers with concrete evidence instead of guesswork.
+- Avoid repeating an unchanged failed strategy.
 
 Validation loop:
 $validation_block
+
+Recent iteration memory:
+$recent_history_block
+
+Feedback updates:
+$feedback_block
 
 Output contract:
 $completion_contract
@@ -615,8 +833,12 @@ model=${model:-"(default)"}
 profile=${profile:-"(default)"}
 max_iterations=$max_iterations
 max_consecutive_failures=$max_consecutive_failures
+max_stagnant_iterations=$max_stagnant_iterations
+sleep_seconds=$sleep_seconds
 completion_promise=${completion_promise:-"(none)"}
 stop_file=$stop_file
+objective_file=${objective_file:-"(none)"}
+feedback_file=$feedback_file
 
 source_of_truth_count=${#source_of_truth[@]}
 preflight_cmd_count=${#preflight_cmds[@]}
@@ -629,6 +851,7 @@ write_lines_file "$validate_file" "${validate_cmds[@]-}"
 write_lines_file "$preflight_file" "${preflight_cmds[@]-}"
 write_lines_file "$source_of_truth_file" "${source_of_truth[@]-}"
 write_lines_file "$codex_args_file" "${codex_extra_args[@]-}"
+prompt="$(resolve_objective)"
 printf '%s\n' "$prompt" > "$prompt_file_saved"
 
 if [[ "$dry_run" -eq 1 ]]; then
@@ -661,6 +884,8 @@ while true; do
     break
   fi
 
+  prompt="$(resolve_objective)"
+  printf '%s\n' "$prompt" > "$prompt_file_saved"
   local_prompt="$(build_iteration_prompt)"
   log_event "iteration_start" "iteration=$iteration"
 
@@ -684,9 +909,13 @@ while true; do
   set -e
 
   if [[ "$codex_exit" -ne 0 ]]; then
+    validation_status="skipped"
+    completion_status="no"
     consecutive_failures=$((consecutive_failures + 1))
     warn "codex exec failed (exit=$codex_exit), consecutive failures=$consecutive_failures"
     log_event "codex_fail" "exit=$codex_exit"
+    refresh_auto_feedback "$codex_exit" "$validation_status" "$completion_status"
+    append_iteration_history "$codex_exit" "$validation_status" "$completion_status"
 
     if [[ "$consecutive_failures" -ge "$max_consecutive_failures" ]]; then
       stop_reason="max_consecutive_failures_reached"
@@ -696,6 +925,7 @@ while true; do
 
     iteration=$((iteration + 1))
     save_state
+    pause_between_iterations
     continue
   fi
 
@@ -710,18 +940,46 @@ while true; do
       validation_ok=0
     fi
   fi
+  if [[ "$validation_ok" -eq 1 ]]; then
+    validation_status="pass"
+  else
+    validation_status="fail"
+  fi
 
   completion_detected=0
-  if [[ -n "$completion_promise" && -f "$last_message_file" ]]; then
+  completion_status="no"
+  normalized_output=""
+  if [[ -f "$last_message_file" ]]; then
     raw_output="$(tr -d '\r' < "$last_message_file")"
     normalized_output="$(trim_ws "$raw_output")"
+  fi
+
+  if [[ -n "$completion_promise" && -n "$normalized_output" ]]; then
     expected_output="<promise>${completion_promise}</promise>"
 
     if [[ "$normalized_output" == "$expected_output" ]]; then
       completion_detected=1
+      completion_status="yes"
       log_event "promise_detected" "$expected_output"
     fi
   fi
+
+  if [[ -n "$normalized_output" ]]; then
+    current_output_hash="$(printf '%s' "$normalized_output" | hash_text)"
+    if [[ -n "$last_output_hash" && "$current_output_hash" == "$last_output_hash" ]]; then
+      stagnant_iterations=$((stagnant_iterations + 1))
+      log_event "stagnant_output" "count=$stagnant_iterations"
+    else
+      stagnant_iterations=0
+    fi
+    last_output_hash="$current_output_hash"
+  else
+    stagnant_iterations=0
+    last_output_hash=""
+  fi
+
+  refresh_auto_feedback "$codex_exit" "$validation_status" "$completion_status"
+  append_iteration_history "$codex_exit" "$validation_status" "$completion_status"
 
   if [[ "$completion_detected" -eq 1 && "$validation_ok" -eq 1 ]]; then
     stop_reason="completion_promise_detected"
@@ -734,8 +992,15 @@ while true; do
     log_event "promise_rejected" "validation_failed"
   fi
 
+  if [[ "$max_stagnant_iterations" -gt 0 && "$stagnant_iterations" -ge "$max_stagnant_iterations" ]]; then
+    stop_reason="max_stagnant_iterations_reached"
+    log_event "stop" "$stop_reason"
+    break
+  fi
+
   iteration=$((iteration + 1))
   save_state
+  pause_between_iterations
 done
 
 active=0

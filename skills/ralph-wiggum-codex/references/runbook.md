@@ -1,25 +1,37 @@
 # Runbook
 
-## Preflight Checklist
+## Primary Usage (Skill Invocation)
 
-- Confirm objective and completion promise are specific.
-- Confirm at least one validation command is present.
-- Confirm max iterations is finite for unattended runs.
-- Confirm source-of-truth artifacts are current.
+Use this skill via `$ralph-wiggum-codex` and let Codex orchestrate the loop.
 
-## Typical Run
+Recommended invocation payload:
+
+- Objective
+- Working directory
+- Validation commands
+- Completion promise (optional but recommended for strict finish)
+- Runtime caps (`max-iterations`, `max-stagnant-iterations`)
+
+## Loop Inputs
+
+Under `<cwd>/.codex/ralph-loop/` maintain:
+
+- `objective.md`: canonical task objective, reloaded every iteration
+- `feedback.md`: operator steering notes, reloaded every iteration
+
+## Script Command (Advanced / Direct)
 
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /repo \
-  --prompt-file docs/tasks/task.md \
+  --objective-file /repo/.codex/ralph-loop/objective.md \
+  --feedback-file /repo/.codex/ralph-loop/feedback.md \
   --source-of-truth docs/tasks/task.md \
-  --source-of-truth docs/architecture.md \
   --completion-promise "DONE" \
-  --max-iterations 25 \
-  --preflight-cmd "npm ci --prefer-offline" \
+  --max-iterations 40 \
+  --max-stagnant-iterations 6 \
   --validate-cmd "npm run lint" \
-  --validate-cmd "npm run build"
+  --validate-cmd "npm run test"
 ```
 
 ## Resume
@@ -36,14 +48,20 @@
 touch /repo/.codex/ralph-loop/STOP
 ```
 
-## Failure Triage
+## Observability And Triage
 
-- Inspect `.codex/ralph-loop/events.log` for stop reason and failure pattern.
-- Inspect validation logs under `.codex/ralph-loop/validation/`.
-- If failures are environmental, fix environment and `--resume`.
-- If failures are prompt-related, update source-of-truth artifacts and restart.
+Review these files first:
 
-## Safety Notes
+- `.codex/ralph-loop/events.log`
+- `.codex/ralph-loop/run-summary.md`
+- `.codex/ralph-loop/iteration-history.md`
+- `.codex/ralph-loop/auto-feedback.md`
+- `.codex/ralph-loop/validation/iteration-*/`
 
-- `--dangerous` removes Codex sandbox protections; use only for explicitly trusted environments.
-- If using `--max-iterations 0`, supply either `--completion-promise` or `--allow-unbounded` intentionally.
+If progress stalls, update `feedback.md` with concrete corrective direction and continue with `--resume`.
+
+## Runtime Notes
+
+- `--max-stagnant-iterations` stops repeated no-progress output loops.
+- `--sleep-seconds` can reduce thrashing for external or rate-limited systems.
+- Use finite `--max-iterations` for unattended runs unless intentionally unbounded.
