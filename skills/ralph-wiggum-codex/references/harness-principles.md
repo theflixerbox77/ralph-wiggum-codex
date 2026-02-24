@@ -10,8 +10,12 @@ This skill applies harness-engineering principles to long-running Codex work.
 ## 2) Legibility Over Guessing
 
 - Deterministic run artifacts: `state.env`, `events.log`, `run-summary.md`.
+- Deterministic runtime selection via `--codex-bin <path-or-name>`.
+- Event artifacts are format-selectable with `--events-format <tsv|jsonl|both>` (default `both`).
+- `events.log` remains compatible for existing tooling; `events.jsonl` is additive.
 - Machine-readable completion schema: `completion-schema.json`.
 - Per-attempt codex event logs: `codex/iteration-<n>-attempt-<m>.jsonl`.
+- Optional per-iteration progress snapshots via `--progress-artifact` under `.codex/ralph-loop/progress/`.
 - Iteration memory (`iteration-history.md`) captures recent outcomes and model output tails.
 - Validation logs are written per iteration.
 

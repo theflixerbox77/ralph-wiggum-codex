@@ -32,6 +32,9 @@ When this skill is invoked, execute this flow:
 - Objective text
 - Validation commands (fastest checks first)
 - Progress scopes (`--progress-scope`) for meaningful edits
+- Codex runtime binary/path (`--codex-bin`) for deterministic runtime selection
+- Event stream artifact format (`--events-format <tsv|jsonl|both>`, default `both`)
+- Whether to persist per-iteration progress artifacts (`--progress-artifact`)
 - Runtime caps (`max-iterations`, `max-stagnant-iterations`, timeout settings)
 - Completion promise only if compatibility mode is required (deprecated)
 
@@ -50,8 +53,11 @@ When this skill is invoked, execute this flow:
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /path/to/repo \
+  --codex-bin codex \
   --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
   --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
+  --events-format both \
+  --progress-artifact \
   --completion-promise "DONE" \
   --max-iterations 40 \
   --max-stagnant-iterations 6 \
@@ -96,15 +102,19 @@ Schema fields:
 - `.codex/ralph-loop/state.env`
 - `.codex/ralph-loop/prompt.txt`
 - `.codex/ralph-loop/events.log`
+- `.codex/ralph-loop/events.jsonl` (with `--events-format jsonl|both`; default `both`)
 - `.codex/ralph-loop/completion-schema.json`
 - `.codex/ralph-loop/iteration-history.md`
 - `.codex/ralph-loop/feedback.md`
 - `.codex/ralph-loop/auto-feedback.md`
 - `.codex/ralph-loop/last-message.txt`
 - `.codex/ralph-loop/run-summary.md`
+- `.codex/ralph-loop/progress/` (when `--progress-artifact` is enabled)
 - `.codex/ralph-loop/validation/`
 - `.codex/ralph-loop/codex/iteration-<n>-attempt-<m>.jsonl`
 - `.codex/ralph-loop/.lock/meta.env` (while active)
+
+`events.log` remains compatible for existing consumers; JSONL events are additive.
 
 ## Resume And Stop
 

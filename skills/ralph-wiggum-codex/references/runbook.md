@@ -10,6 +10,9 @@ Recommended invocation payload:
 - Working directory
 - Validation commands
 - Progress scope (`--progress-scope`) for meaningful edit detection
+- Codex binary/path (`--codex-bin`) for deterministic runtime selection
+- Event stream format (`--events-format <tsv|jsonl|both>`, default `both`)
+- Progress artifact toggle (`--progress-artifact`) for per-iteration files
 - Runtime caps (`max-iterations`, `max-stagnant-iterations`, timeout settings)
 - Completion promise only if compatibility mode is needed (deprecated)
 
@@ -25,8 +28,11 @@ Under `<cwd>/.codex/ralph-loop/` maintain:
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /repo \
+  --codex-bin codex \
   --objective-file /repo/.codex/ralph-loop/objective.md \
   --feedback-file /repo/.codex/ralph-loop/feedback.md \
+  --events-format both \
+  --progress-artifact \
   --source-of-truth docs/tasks/task.md \
   --completion-promise "DONE" \
   --max-iterations 40 \
@@ -58,12 +64,16 @@ touch /repo/.codex/ralph-loop/STOP
 Review these files first:
 
 - `.codex/ralph-loop/events.log`
+- `.codex/ralph-loop/events.jsonl`
 - `.codex/ralph-loop/run-summary.md`
 - `.codex/ralph-loop/iteration-history.md`
 - `.codex/ralph-loop/completion-schema.json`
 - `.codex/ralph-loop/codex/iteration-<n>-attempt-<m>.jsonl`
+- `.codex/ralph-loop/progress/`
 - `.codex/ralph-loop/auto-feedback.md`
 - `.codex/ralph-loop/validation/iteration-*/`
+
+`events.log` remains compatible with existing parsers; `events.jsonl` is an additive artifact controlled by `--events-format`.
 
 If progress stalls, update `feedback.md` with concrete corrective direction and continue with `--resume`.
 
@@ -75,4 +85,7 @@ If progress stalls, update `feedback.md` with concrete corrective direction and 
 - `--timeout-retries` retries timeout-killed attempts (default: 1).
 - `--reclaim-stale-lock` force-recovers malformed lock metadata.
 - `--sleep-seconds` can reduce thrashing for external or rate-limited systems.
+- `--codex-bin` locks execution to a specific Codex binary/path for deterministic runtime selection.
+- `--events-format` controls event artifacts: `tsv` (`events.log`), `jsonl` (`events.jsonl`), or `both` (default).
+- `--progress-artifact` writes per-iteration progress artifacts under `.codex/ralph-loop/progress/`.
 - Use finite `--max-iterations` for unattended runs unless intentionally unbounded.

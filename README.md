@@ -21,6 +21,9 @@ This is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a 
 - Iteration memory (`iteration-history.md`) fed back into future iterations
 - Stagnation detection (`--max-stagnant-iterations`)
 - Scoped progress gating (`--progress-scope`) to block no-op iterations
+- Deterministic Codex runtime selection (`--codex-bin <path-or-name>`)
+- Configurable event artifact formats (`--events-format <tsv|jsonl|both>`, default `both`)
+- Optional per-iteration progress artifacts (`--progress-artifact`)
 - Watchdog timeouts with controlled retries (`--idle-timeout-seconds`, `--hard-timeout-seconds`, `--timeout-retries`)
 - Resume support and stale-lock recovery with metadata (`--reclaim-stale-lock`)
 
@@ -68,8 +71,11 @@ The skill will set up and run the loop under `.codex/ralph-loop/`.
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /path/to/repo \
+  --codex-bin codex \
   --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
   --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
+  --events-format both \
+  --progress-artifact \
   --completion-promise "DONE" \
   --max-iterations 40 \
   --max-stagnant-iterations 6 \
@@ -111,15 +117,19 @@ Each iteration asks Codex to emit exactly one JSON object conforming to `.codex/
 
 - `.codex/ralph-loop/state.env`
 - `.codex/ralph-loop/events.log`
+- `.codex/ralph-loop/events.jsonl` (when `--events-format jsonl|both`; default `both`)
 - `.codex/ralph-loop/completion-schema.json`
 - `.codex/ralph-loop/iteration-history.md`
 - `.codex/ralph-loop/feedback.md`
 - `.codex/ralph-loop/auto-feedback.md`
 - `.codex/ralph-loop/last-message.txt`
 - `.codex/ralph-loop/run-summary.md`
+- `.codex/ralph-loop/progress/` (when `--progress-artifact` is enabled)
 - `.codex/ralph-loop/validation/`
 - `.codex/ralph-loop/codex/iteration-<n>-attempt-<m>.jsonl`
 - `.codex/ralph-loop/.lock/meta.env` (while active)
+
+`events.log` remains the compatible/default-friendly artifact for existing tooling; `events.jsonl` is additive.
 
 ## Repo Structure
 

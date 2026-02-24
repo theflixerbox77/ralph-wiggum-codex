@@ -52,11 +52,10 @@ make_repo() {
 run_loop() {
   local scenario="$1"
   shift
-  PATH="$FIXTURE_PATH:$PATH" \
-    CODEX_STUB_SCENARIO="$scenario" \
+  CODEX_STUB_SCENARIO="$scenario" \
     CODEX_STUB_STATE_DIR="$tmp_dir/stub-$RANDOM-$RANDOM" \
     CODEX_STUB_COMPLETION_PROMISE="DONE" \
-    "$SCRIPT" "$@"
+    "$SCRIPT" --codex-bin "$FIXTURE_PATH/codex" "$@"
 }
 
 tmp_dir="$(mktemp -d)"
@@ -73,6 +72,7 @@ expect_failure "missing prompt fails" run_loop schema_complete_change --cwd "$ba
 expect_failure "invalid autonomy level fails" run_loop schema_complete_change --cwd "$base_repo" --prompt "x" --autonomy-level bad --dry-run >/dev/null 2>&1
 expect_failure "invalid max stagnant iterations fails" run_loop schema_complete_change --cwd "$base_repo" --prompt "x" --max-stagnant-iterations nope --dry-run >/dev/null 2>&1
 expect_failure "invalid idle timeout fails" run_loop schema_complete_change --cwd "$base_repo" --prompt "x" --idle-timeout-seconds nope --dry-run >/dev/null 2>&1
+expect_failure "invalid codex bin fails preflight" run_loop schema_complete_change --cwd "$base_repo" --prompt "x" --codex-bin "$tmp_dir/does-not-exist-codex" >/dev/null 2>&1
 expect_success "dry-run config works" run_loop schema_complete_change --cwd "$base_repo" --prompt "x" --completion-promise "DONE" --max-iterations 2 --idle-timeout-seconds 12 --hard-timeout-seconds 34 --timeout-retries 2 --progress-scope . --dry-run >/dev/null
 expect_success "objective file dry-run works" run_loop schema_complete_change --cwd "$base_repo" --objective-file "$objective_file" --dry-run >/dev/null
 expect_failure "resume without state fails" run_loop schema_complete_change --cwd "$base_repo" --resume >/dev/null 2>&1
@@ -96,6 +96,33 @@ make_repo "$repo_timeout"
 expect_success "timeout retry reaches completion" run_loop timeout_then_complete --cwd "$repo_timeout" --state-dir "$state_timeout" --prompt "work" --completion-promise "DONE" --max-iterations 3 --idle-timeout-seconds 1 --hard-timeout-seconds 2 --timeout-retries 1 >/dev/null
 expect_success "timeout retry event logged" grep -q "codex_timeout_retry" "$state_timeout/events.log"
 expect_success "timeout run completes" grep -q "schema_completion_detected" "$state_timeout/run-summary.md"
+
+repo_events_tsv="$tmp_dir/repo-events-tsv"
+state_events_tsv="$repo_events_tsv/.codex/ralph-loop"
+make_repo "$repo_events_tsv"
+expect_success "events format tsv run completes" run_loop schema_complete_change --cwd "$repo_events_tsv" --state-dir "$state_events_tsv" --prompt "work" --events-format tsv --max-iterations 1 >/dev/null
+expect_success "events format tsv writes events.log" test -f "$state_events_tsv/events.log"
+expect_success "events format tsv omits events.jsonl" test ! -f "$state_events_tsv/events.jsonl"
+
+repo_events_jsonl="$tmp_dir/repo-events-jsonl"
+state_events_jsonl="$repo_events_jsonl/.codex/ralph-loop"
+make_repo "$repo_events_jsonl"
+expect_success "events format jsonl run completes" run_loop schema_complete_change --cwd "$repo_events_jsonl" --state-dir "$state_events_jsonl" --prompt "work" --events-format jsonl --max-iterations 1 >/dev/null
+expect_success "events format jsonl writes events.jsonl" test -f "$state_events_jsonl/events.jsonl"
+expect_success "events format jsonl omits events.log" test ! -f "$state_events_jsonl/events.log"
+
+repo_events_both="$tmp_dir/repo-events-both"
+state_events_both="$repo_events_both/.codex/ralph-loop"
+make_repo "$repo_events_both"
+expect_success "events format both run completes" run_loop schema_complete_change --cwd "$repo_events_both" --state-dir "$state_events_both" --prompt "work" --events-format both --max-iterations 1 >/dev/null
+expect_success "events format both writes events.log" test -f "$state_events_both/events.log"
+expect_success "events format both writes events.jsonl" test -f "$state_events_both/events.jsonl"
+
+repo_progress_artifact="$tmp_dir/repo-progress-artifact"
+state_progress_artifact="$repo_progress_artifact/.codex/ralph-loop"
+make_repo "$repo_progress_artifact"
+expect_success "progress artifact run completes" run_loop schema_complete_change --cwd "$repo_progress_artifact" --state-dir "$state_progress_artifact" --prompt "work" --max-iterations 1 --progress-artifact >/dev/null
+expect_success "progress artifact iteration file exists" test -f "$state_progress_artifact/progress/iteration-1.txt"
 
 repo_noop="$tmp_dir/repo-noop"
 state_noop="$repo_noop/.codex/ralph-loop"

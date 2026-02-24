@@ -11,11 +11,19 @@ Each iteration runs:
 
 1. Build an iteration prompt that includes: objective, validation commands, recent iteration memory, and operator feedback.
 2. Run `codex exec` with:
+   - deterministic runtime binary/path from `--codex-bin <path-or-name>`
    - machine-readable event stream (`--json`) written to a per-attempt JSONL file
    - final message written to `.codex/ralph-loop/last-message.txt`
    - a JSON Schema contract (`--output-schema`) written to `.codex/ralph-loop/completion-schema.json`
 3. Run validation commands (if configured).
 4. Evaluate completion + progress gates.
+
+Run-level event artifacts are controlled by `--events-format <tsv|jsonl|both>` (default `both`):
+- `tsv` writes `.codex/ralph-loop/events.log`
+- `jsonl` writes `.codex/ralph-loop/events.jsonl`
+- `both` writes both artifacts
+
+`events.log` remains compatible for existing consumers.
 
 ## Completion Contract (Schema-Based)
 
@@ -65,6 +73,9 @@ The gate blocks completion when:
 Note:
 - files under the runner state dir (`.codex/ralph-loop/`) are ignored for progress detection so that writing artifacts does not count as progress.
 
+Optional observability:
+- `--progress-artifact` writes per-iteration progress artifacts under `.codex/ralph-loop/progress/` without affecting scoped progress gating.
+
 ## Watchdog Timeouts + Retry
 
 Problem this solves:
@@ -106,6 +117,20 @@ Common stop reasons:
 - `max_consecutive_failures_reached`
 - `max_stagnant_iterations_reached`
 - `stop_file_detected`
+
+## Example Invocation With New Runner Options
+
+```bash
+~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
+  --cwd /repo \
+  --codex-bin codex \
+  --objective-file /repo/.codex/ralph-loop/objective.md \
+  --feedback-file /repo/.codex/ralph-loop/feedback.md \
+  --events-format both \
+  --progress-artifact \
+  --max-iterations 40 \
+  --validate-cmd "npm run test"
+```
 
 ## Operational Tips
 

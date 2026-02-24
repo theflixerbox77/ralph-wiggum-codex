@@ -46,12 +46,15 @@ Harness and safety options:
   --reclaim-stale-lock             Force reclaim existing lock even if metadata is missing/corrupt
 
 Codex execution options:
+  --codex-bin <path-or-name>       Codex CLI binary to execute (default: codex)
   --sandbox <mode>                 codex exec sandbox mode (read-only/workspace-write/danger-full-access)
   --model <model>                  Model override for codex exec
   --profile <profile>              Profile override for codex exec
   --idle-timeout-seconds <n>       Kill codex exec when JSON stream is idle for n seconds (default: 900, 0=disabled)
   --hard-timeout-seconds <n>       Kill codex exec when total runtime exceeds n seconds (default: 7200, 0=disabled)
   --timeout-retries <n>            Retry timeout-killed codex exec attempts n times (default: 1)
+  --events-format <tsv|jsonl|both> Event log format (default: both)
+  --progress-artifact              Write per-iteration scoped progress artifacts under <state-dir>/progress/
   --full-auto                      Pass --full-auto to codex exec
   --dangerous                      Pass --dangerously-bypass-approvals-and-sandbox to codex exec
   --codex-arg <arg>                Additional argument passed to codex exec (repeatable)
@@ -157,6 +160,7 @@ source_of_truth_file=""
 progress_scope_file=""
 codex_args_file=""
 events_file=""
+events_jsonl_file=""
 last_message_file=""
 summary_file=""
 stop_file=""
@@ -164,6 +168,7 @@ lock_dir=""
 lock_meta_file=""
 completion_schema_file=""
 codex_log_dir=""
+progress_artifact_dir=""
 state_dir_rel=""
 
 prompt=""
@@ -176,12 +181,16 @@ max_consecutive_failures="$DEFAULT_MAX_CONSECUTIVE_FAILURES"
 max_stagnant_iterations="$DEFAULT_MAX_STAGNANT_ITERATIONS"
 autonomy_level="l2"
 sandbox=""
+codex_bin="codex"
+resolved_codex_bin=""
 model=""
 profile=""
 sleep_seconds=0
 idle_timeout_seconds="$DEFAULT_IDLE_TIMEOUT_SECONDS"
 hard_timeout_seconds="$DEFAULT_HARD_TIMEOUT_SECONDS"
 timeout_retries="$DEFAULT_TIMEOUT_RETRIES"
+events_format="both"
+progress_artifact=0
 
 resume=0
 allow_unbounded=0
@@ -206,6 +215,9 @@ provided_sleep_seconds=0
 provided_idle_timeout_seconds=0
 provided_hard_timeout_seconds=0
 provided_timeout_retries=0
+provided_codex_bin=0
+provided_events_format=0
+provided_progress_artifact=0
 
 validate_cmds=()
 preflight_cmds=()
@@ -297,6 +309,16 @@ while [[ $# -gt 0 ]]; do
       provided_timeout_retries=1
       shift 2
       ;;
+    --events-format)
+      events_format="${2:-}"
+      provided_events_format=1
+      shift 2
+      ;;
+    --progress-artifact)
+      progress_artifact=1
+      provided_progress_artifact=1
+      shift
+      ;;
     --autonomy-level)
       autonomy_level="${2:-}"
       provided_autonomy=1
@@ -325,6 +347,11 @@ while [[ $# -gt 0 ]]; do
     --sandbox)
       sandbox="${2:-}"
       provided_sandbox=1
+      shift 2
+      ;;
+    --codex-bin)
+      codex_bin="${2:-}"
+      provided_codex_bin=1
       shift 2
       ;;
     --model)
@@ -401,10 +428,12 @@ source_of_truth_file="$state_dir/source-of-truth.txt"
 progress_scope_file="$state_dir/progress-scopes.txt"
 codex_args_file="$state_dir/codex-args.txt"
 events_file="$state_dir/events.log"
+events_jsonl_file="$state_dir/events.jsonl"
 last_message_file="$state_dir/last-message.txt"
 summary_file="$state_dir/run-summary.md"
 completion_schema_file="$state_dir/completion-schema.json"
 codex_log_dir="$state_dir/codex"
+progress_artifact_dir="$state_dir/progress"
 
 if [[ -z "$stop_file" ]]; then
   stop_file="$state_dir/STOP"
@@ -509,6 +538,18 @@ if [[ "$resume" -eq 1 ]]; then
     timeout_retries="${TIMEOUT_RETRIES:-$DEFAULT_TIMEOUT_RETRIES}"
   fi
 
+  if [[ "$provided_codex_bin" -eq 0 ]]; then
+    codex_bin="${CODEX_BIN:-codex}"
+  fi
+
+  if [[ "$provided_events_format" -eq 0 ]]; then
+    events_format="${EVENTS_FORMAT:-both}"
+  fi
+
+  if [[ "$provided_progress_artifact" -eq 0 ]]; then
+    progress_artifact="${PROGRESS_ARTIFACT:-0}"
+  fi
+
   if [[ -z "$model" ]]; then
     model="${MODEL:-}"
   fi
@@ -584,8 +625,23 @@ else
   last_output_hash=""
 fi
 
+[[ -n "$codex_bin" ]] || die "--codex-bin cannot be empty"
+case "$events_format" in
+  tsv|jsonl|both)
+    ;;
+  *)
+    die "--events-format must be one of: tsv, jsonl, both"
+    ;;
+esac
+if ! [[ "$progress_artifact" =~ ^[01]$ ]]; then
+  die "--progress-artifact internal state must be 0 or 1"
+fi
+
 mkdir -p "$state_dir"
 mkdir -p "$codex_log_dir"
+if [[ "$progress_artifact" -eq 1 ]]; then
+  mkdir -p "$progress_artifact_dir"
+fi
 
 lock_pid_from_meta() {
   local meta_file="$1"
@@ -650,7 +706,26 @@ log_event() {
   local ts
   ts="$(now_utc)"
   last_event_at="$ts"
-  printf '%s\titeration=%s\tevent=%s\tdetail=%s\n' "$ts" "$iteration" "$event" "$detail" >> "$events_file"
+
+  if [[ "$events_format" == "tsv" || "$events_format" == "both" ]]; then
+    printf '%s\titeration=%s\tevent=%s\tdetail=%s\n' "$ts" "$iteration" "$event" "$detail" >> "$events_file"
+  fi
+
+  if [[ "$events_format" == "jsonl" || "$events_format" == "both" ]]; then
+    python3 - "$ts" "$iteration" "$event" "$detail" <<'PY' >> "$events_jsonl_file"
+import json
+import sys
+
+ts, iteration, event, detail = sys.argv[1:5]
+obj = {
+    "timestamp": ts,
+    "iteration": int(iteration),
+    "event": event,
+    "detail": detail,
+}
+print(json.dumps(obj, ensure_ascii=True))
+PY
+  fi
 }
 
 write_completion_schema() {
@@ -711,6 +786,9 @@ SLEEP_SECONDS=$sleep_seconds
 IDLE_TIMEOUT_SECONDS=$idle_timeout_seconds
 HARD_TIMEOUT_SECONDS=$hard_timeout_seconds
 TIMEOUT_RETRIES=$timeout_retries
+CODEX_BIN=$(printf '%q' "$codex_bin")
+EVENTS_FORMAT=$(printf '%q' "$events_format")
+PROGRESS_ARTIFACT=$progress_artifact
 EOF_STATE
 }
 
@@ -730,10 +808,12 @@ write_summary() {
 - Working directory: $cwd
 - State directory: $state_dir
 - Events log: $events_file
+- Events JSONL: $events_jsonl_file
 - Last message: $last_message_file
 - Iteration history: $history_file
 - Feedback file: $feedback_file
 - Auto feedback file: $auto_feedback_file
+- Progress artifacts: $(if [[ "$progress_artifact" -eq 1 ]]; then printf '%s' "$progress_artifact_dir"; else printf '%s' "(disabled)"; fi)
 
 ## Configuration
 
@@ -747,6 +827,9 @@ write_summary() {
 - Idle timeout seconds: $idle_timeout_seconds
 - Hard timeout seconds: $hard_timeout_seconds
 - Timeout retries: $timeout_retries
+- Codex binary: $codex_bin
+- Events format: $events_format
+- Progress artifacts enabled: $progress_artifact
 - Objective file: ${objective_file:-"(none)"}
 - Completion schema: $completion_schema_file
 
@@ -944,9 +1027,22 @@ run_cmd_in_cwd() {
   )
 }
 
-scoped_status_hash() {
+status_line_to_path() {
+  local line="$1"
+  local path="${line:3}"
+  path="${path#\"}"
+  path="${path%\"}"
+  if [[ "$path" == *" -> "* ]]; then
+    path="${path##* -> }"
+    path="${path#\"}"
+    path="${path%\"}"
+  fi
+  printf '%s' "$path"
+}
+
+scoped_status_output() {
   if [[ "$is_git_repo" -ne 1 ]]; then
-    printf '%s' "not-git"
+    printf '%s' ""
     return 0
   fi
 
@@ -961,9 +1057,7 @@ scoped_status_hash() {
     local path=""
     while IFS= read -r line; do
       [[ -n "$line" ]] || continue
-      path="${line:3}"
-      path="${path#\"}"
-      path="${path%\"}"
+      path="$(status_line_to_path "$line")"
       if [[ "$path" == "$state_dir_rel" || "$path" == "$state_dir_rel/"* ]]; then
         continue
       fi
@@ -976,7 +1070,113 @@ scoped_status_hash() {
     fi
   fi
 
+  printf '%s' "$status_output"
+}
+
+status_output_hash() {
+  local status_output="$1"
   printf '%s' "$status_output" | hash_text
+}
+
+count_nonempty_lines() {
+  local text="$1"
+  local count=0
+  local line=""
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    count=$((count + 1))
+  done <<< "$text"
+  printf '%s' "$count"
+}
+
+summarize_changed_paths() {
+  local changed_paths="$1"
+  local max_items="${2:-5}"
+  local out=()
+  local line=""
+  local count=0
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    out+=("$line")
+    count=$((count + 1))
+    if [[ "$count" -ge "$max_items" ]]; then
+      break
+    fi
+  done <<< "$changed_paths"
+
+  if [[ ${#out[@]} -eq 0 ]]; then
+    printf '%s' "(none)"
+    return
+  fi
+
+  local joined
+  joined="$(printf '%s,' "${out[@]}")"
+  joined="${joined%,}"
+  printf '%s' "$joined"
+}
+
+compute_changed_paths_from_status_outputs() {
+  local pre_output="$1"
+  local post_output="$2"
+  local pre_file=""
+  local post_file=""
+  pre_file="$(mktemp)"
+  post_file="$(mktemp)"
+  printf '%s' "$pre_output" > "$pre_file"
+  printf '%s' "$post_output" > "$post_file"
+
+  python3 - "$pre_file" "$post_file" <<'PY'
+import sys
+
+pre_file, post_file = sys.argv[1], sys.argv[2]
+
+def path_from_line(line: str) -> str:
+    path = line[3:].strip().strip('"')
+    if " -> " in path:
+        path = path.split(" -> ", 1)[1].strip().strip('"')
+    return path
+
+def status_map(path: str) -> dict:
+    out = {}
+    with open(path, "r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.rstrip("\n")
+            if not line:
+                continue
+            key = path_from_line(line)
+            if not key:
+                continue
+            out[key] = line[:2]
+    return out
+
+pre = status_map(pre_file)
+post = status_map(post_file)
+changed = sorted({p for p in set(pre) | set(post) if pre.get(p) != post.get(p)})
+for item in changed:
+    print(item)
+PY
+
+  rm -f "$pre_file" "$post_file"
+}
+
+write_progress_artifact() {
+  local pre_output="$1"
+  local post_output="$2"
+  local changed_paths="$3"
+
+  [[ "$progress_artifact" -eq 1 ]] || return 0
+  mkdir -p "$progress_artifact_dir"
+
+  local artifact_file="$progress_artifact_dir/iteration-${iteration}.txt"
+  {
+    printf 'iteration=%s\n' "$iteration"
+    printf 'timestamp=%s\n' "$(now_utc)"
+    printf 'changed_path_count=%s\n' "$(count_nonempty_lines "$changed_paths")"
+    printf 'changed_paths_preview=%s\n\n' "$(summarize_changed_paths "$changed_paths" 8)"
+    printf 'pre_status_porcelain:\n%s\n\n' "${pre_output:-"(empty)"}"
+    printf 'post_status_porcelain:\n%s\n\n' "${post_output:-"(empty)"}"
+    printf 'changed_paths:\n%s\n' "${changed_paths:-"(none)"}"
+  } > "$artifact_file"
 }
 
 parse_completion_message_json() {
@@ -1052,7 +1252,7 @@ run_codex_exec_with_watchdog() {
   local attempt_stderr="$codex_log_dir/iteration-${iteration}-attempt-${attempt}.stderr.log"
   local codex_cmd=()
 
-  codex_cmd=(codex exec -C "$cwd" --output-last-message "$last_message_file" --output-schema "$completion_schema_file" --json)
+  codex_cmd=("$resolved_codex_bin" exec -C "$cwd" --output-last-message "$last_message_file" --output-schema "$completion_schema_file" --json)
 
   [[ -n "$sandbox" ]] && codex_cmd+=(--sandbox "$sandbox")
   [[ -n "$model" ]] && codex_cmd+=(--model "$model")
@@ -1119,8 +1319,12 @@ run_codex_exec_with_watchdog() {
 }
 
 run_preflight() {
-  command -v codex >/dev/null 2>&1 || die "codex CLI not found in PATH"
+  if ! resolved_codex_bin="$(command -v "$codex_bin" 2>/dev/null)"; then
+    die "codex binary not found: $codex_bin"
+  fi
   command -v python3 >/dev/null 2>&1 || die "python3 is required to parse schema output"
+  note "Using codex binary: $resolved_codex_bin"
+  log_event "preflight_codex_bin" "codex_bin=$codex_bin;resolved=$resolved_codex_bin"
 
   if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     is_git_repo=1
@@ -1261,6 +1465,7 @@ cwd=$cwd
 state_dir=$state_dir
 autonomy_level=$autonomy_level
 sandbox=$sandbox
+codex_bin=$codex_bin
 model=${model:-"(default)"}
 profile=${profile:-"(default)"}
 max_iterations=$max_iterations
@@ -1270,6 +1475,8 @@ sleep_seconds=$sleep_seconds
 idle_timeout_seconds=$idle_timeout_seconds
 hard_timeout_seconds=$hard_timeout_seconds
 timeout_retries=$timeout_retries
+events_format=$events_format
+progress_artifact=$progress_artifact
 completion_promise=${completion_promise:-"(none)"}
 stop_file=$stop_file
 objective_file=${objective_file:-"(none)"}
@@ -1302,7 +1509,7 @@ note "Ralph loop started"
 note "Run ID: $run_id"
 note "State dir: $state_dir"
 note "Stop file: $stop_file"
-log_event "loop_start" "autonomy=$autonomy_level;sandbox=$sandbox"
+log_event "loop_start" "autonomy=$autonomy_level;sandbox=$sandbox;events_format=$events_format;codex_bin=$codex_bin"
 
 run_preflight
 write_completion_schema
@@ -1333,7 +1540,8 @@ while true; do
   local_prompt="$(build_iteration_prompt)"
   log_event "iteration_start" "iteration=$iteration"
 
-  pre_scope_hash="$(scoped_status_hash)"
+  pre_scope_status="$(scoped_status_output)"
+  pre_scope_hash="$(status_output_hash "$pre_scope_status")"
 
   codex_exit=0
   attempt=1
@@ -1412,21 +1620,31 @@ while true; do
     log_event "schema_parse_fail" "file=$last_message_file;status=$schema_parse_status"
   fi
 
-  post_scope_hash="$(scoped_status_hash)"
+  post_scope_status="$(scoped_status_output)"
+  post_scope_hash="$(status_output_hash "$post_scope_status")"
+  changed_paths=""
+  changed_path_count=0
+  changed_path_preview="(none)"
   if [[ "$is_git_repo" -eq 1 ]]; then
-    if [[ "$pre_scope_hash" != "$post_scope_hash" ]]; then
+    changed_paths="$(compute_changed_paths_from_status_outputs "$pre_scope_status" "$post_scope_status")"
+    changed_path_count="$(count_nonempty_lines "$changed_paths")"
+    changed_path_preview="$(summarize_changed_paths "$changed_paths" 5)"
+    write_progress_artifact "$pre_scope_status" "$post_scope_status" "$changed_paths"
+    log_event "progress_scope_diff" "iteration=$iteration;changed_path_count=$changed_path_count;changed_paths=$changed_path_preview"
+
+    if [[ "$pre_scope_hash" != "$post_scope_hash" || "$changed_path_count" -gt 0 ]]; then
       progress_changed=1
       progress_status="pass"
     elif [[ -n "$no_change_justification" ]]; then
       progress_changed=0
       progress_status="no_change_justified"
-      log_event "progress_gate_justified" "iteration=$iteration"
+      log_event "progress_gate_justified" "iteration=$iteration;changed_path_count=$changed_path_count;changed_paths=$changed_path_preview"
     else
       progress_changed=0
       progress_status="no_change_unjustified"
       completion_detected=0
       completion_status="no"
-      log_event "progress_gate_block" "iteration=$iteration"
+      log_event "progress_gate_block" "iteration=$iteration;changed_path_count=$changed_path_count;changed_paths=$changed_path_preview"
     fi
   else
     progress_changed=1
