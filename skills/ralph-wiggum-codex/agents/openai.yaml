@@ -1,7 +1,7 @@
 interface:
   display_name: "Ralph Wiggum Codex"
   short_description: "Long-running autonomous refinement loop for Codex tasks"
-  default_prompt: "Use $ralph-wiggum-codex to run an iterative refinement loop with objective/feedback files, validation checks, and explicit completion criteria."
+  default_prompt: "Use $ralph-wiggum-codex to run an iterative refinement loop with objective/feedback files, validation checks, schema-based completion, scoped progress gating (--progress-scope), and watchdog timeouts (--idle-timeout-seconds / --hard-timeout-seconds)."
 
 policy:
   allow_implicit_invocation: false

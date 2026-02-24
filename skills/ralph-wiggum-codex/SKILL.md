@@ -126,3 +126,4 @@ touch /path/to/repo/.codex/ralph-loop/STOP
 
 - Harness principles: `references/harness-principles.md`
 - Operational runbook: `references/runbook.md`
+- Reliability vNext: `references/reliability-vnext.md`

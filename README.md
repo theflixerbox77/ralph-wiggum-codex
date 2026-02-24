@@ -131,6 +131,7 @@ skills/ralph-wiggum-codex/
   references/
     harness-principles.md
     runbook.md
+    reliability-vnext.md
 ```
 
 ## CI

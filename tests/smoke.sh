@@ -134,7 +134,9 @@ repo_resume="$tmp_dir/repo-resume"
 state_resume="$repo_resume/.codex/ralph-loop"
 make_repo "$repo_resume"
 expect_success "initial timeout run leaves resumable state" run_loop always_timeout --cwd "$repo_resume" --state-dir "$state_resume" --prompt "recover" --completion-promise "DONE" --max-iterations 1 --idle-timeout-seconds 1 --hard-timeout-seconds 2 --timeout-retries 0 >/dev/null
-expect_success "resume after timeout completes" run_loop schema_complete_change --cwd "$repo_resume" --state-dir "$state_resume" --resume --max-iterations 2 >/dev/null
+# Resume correctness is the goal here (state + completion), not watchdog behavior. Give this step
+# more headroom so it doesn't flake under load or if a real `codex` is accidentally on PATH.
+expect_success "resume after timeout completes" run_loop schema_complete_change --cwd "$repo_resume" --state-dir "$state_resume" --resume --max-iterations 2 --idle-timeout-seconds 10 --hard-timeout-seconds 30 >/dev/null
 expect_success "resume completion stop reason recorded" grep -q "schema_completion_detected" "$state_resume/run-summary.md"
 expect_success "lock directory cleaned up after run" test ! -d "$state_resume/.lock"
 
