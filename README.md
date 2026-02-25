@@ -27,6 +27,62 @@ This is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a 
 - Watchdog timeouts with controlled retries (`--idle-timeout-seconds`, `--hard-timeout-seconds`, `--timeout-retries`)
 - Resume support and stale-lock recovery with metadata (`--reclaim-stale-lock`)
 
+## Companion Prompt Generator
+
+This repo also includes `ralph-prompt-generator`, a companion skill that converts rough requests into execution-ready prompts for `$ralph-wiggum-codex`.
+
+Use the companion when:
+- The objective is ambiguous or underspecified.
+- You want model/reasoning defaults chosen for you.
+- You want loop flags pre-synthesized before starting a long run.
+
+Example input:
+
+```text
+$ralph-prompt-generator
+Refactor auth middleware and prevent regressions.
+```
+
+Example generated output block:
+
+```text
+/skills
+$ralph-wiggum-codex
+Run this in: /path/to/repo
+Objective: Refactor auth middleware while preserving behavior.
+Constraints:
+- Keep public API behavior unchanged.
+- Avoid unrelated refactors.
+Non-goals:
+- No new auth features.
+Success criteria:
+- Tests pass and behavior is preserved.
+Validation:
+- npm run lint
+- npm run test -- auth
+Progress scope:
+- "src/auth/"
+Recommended model: gpt-5.3-codex
+Reasoning effort: high
+Suggested runner flags:
+--autonomy-level l2
+--max-iterations 24
+--max-consecutive-failures 3
+--max-stagnant-iterations 4
+--progress-scope "src/auth/"
+--idle-timeout-seconds 900
+--hard-timeout-seconds 5400
+--timeout-retries 1
+--events-format both
+--progress-artifact
+--validate-cmd "npm run lint"
+--validate-cmd "npm run test -- auth"
+```
+
+Relationship to `ralph-wiggum-codex`:
+- `ralph-prompt-generator` optimizes briefing/configuration.
+- `ralph-wiggum-codex` runs the autonomous refinement loop.
+
 ## Install
 
 ### Option 1: Codex Skill Installer (recommended)
@@ -134,6 +190,13 @@ Each iteration asks Codex to emit exactly one JSON object conforming to `.codex/
 ## Repo Structure
 
 ```text
+skills/ralph-prompt-generator/
+  SKILL.md
+  agents/openai.yaml
+  references/
+    prompt-improver-principles.md
+    openai-codex-prompting-2026.md
+    ralph-flag-selection-matrix.md
 skills/ralph-wiggum-codex/
   SKILL.md
   agents/openai.yaml
@@ -142,6 +205,9 @@ skills/ralph-wiggum-codex/
     harness-principles.md
     runbook.md
     reliability-vnext.md
+docs/
+  configuration.md
+  ralph-prompt-generator.md
 ```
 
 ## CI
@@ -153,6 +219,7 @@ This repo runs:
 ## Docs
 
 - `docs/configuration.md`: complete flag reference and effective usage patterns for the runner.
+- `docs/ralph-prompt-generator.md`: companion-skill workflow, examples, and handoff pattern.
 
 ## Search Keywords
 

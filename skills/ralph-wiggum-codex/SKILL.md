@@ -23,6 +23,27 @@ Do not use this skill when:
 - No meaningful validation loop exists.
 - The user wants manual step-by-step control each turn.
 
+## Companion Prompt Generator (Recommended Handoff)
+
+When objectives are ambiguous or missing loop configuration, invoke `$ralph-prompt-generator` first to produce a ready-to-run block for this skill.
+
+Use the companion first when:
+- Validation commands are unknown or incomplete.
+- Scope/progress paths are unclear.
+- Model/reasoning/iteration caps are not specified.
+- The task is high risk and you want stronger guardrails before execution.
+
+Companion handoff pattern:
+1. Run `$ralph-prompt-generator` with the raw request.
+2. Answer its required question about suggested output sections.
+3. Confirm any inferred validations/scopes it proposes (or provide your own).
+4. Provide any additional targeted clarifications it requests.
+5. Execute the generated block, which should start with:
+   - `/skills`
+   - `$ralph-wiggum-codex`
+
+You can skip the companion when you already have a complete, validated prompt with explicit flags and checks.
+
 ## Skill-First Operating Contract
 
 When this skill is invoked, execute this flow:
