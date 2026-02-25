@@ -150,6 +150,10 @@ This repo runs:
 - Bash syntax check for the loop runner
 - Smoke tests in `tests/smoke.sh`
 
+## Docs
+
+- `docs/configuration.md`: complete flag reference and effective usage patterns for the runner.
+
 ## Search Keywords
 
 Codex skill, autonomous coding loop, iterative coding agent, long-running coding workflow, agentic refinement loop, Ralph loop Codex, coding harness.
