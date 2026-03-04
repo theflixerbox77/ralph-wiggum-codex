@@ -85,12 +85,12 @@ case "$scenario" in
   schema_complete_change)
     emit_json_event "complete"
     touch_progress_file
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"implemented change\"],\"next_step\":\"NONE\",\"completion_promise\":\"$completion_promise_value\"}"
+    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"implemented change\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
     exit 0
     ;;
   schema_complete_nochange)
     emit_json_event "complete without change"
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"reviewed constraints\"],\"next_step\":\"NONE\",\"completion_promise\":\"$completion_promise_value\"}"
+    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"reviewed constraints\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
     exit 0
     ;;
   schema_complete_nochange_justified)
@@ -101,7 +101,7 @@ case "$scenario" in
   schema_in_progress)
     emit_json_event "in progress"
     touch_progress_file
-    write_last_message "{\"status\":\"IN_PROGRESS\",\"evidence\":[\"partial implementation\"],\"next_step\":\"Finish tests\"}"
+    write_last_message "{\"status\":\"IN_PROGRESS\",\"evidence\":[\"partial implementation\"],\"next_step\":\"Finish tests\",\"no_change_justification\":\"\",\"completion_promise\":\"\"}"
     exit 0
     ;;
   invalid_json)
@@ -120,7 +120,7 @@ case "$scenario" in
     fi
     emit_json_event "complete after retry"
     touch_progress_file
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"retried and completed\"],\"next_step\":\"NONE\",\"completion_promise\":\"$completion_promise_value\"}"
+    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"retried and completed\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
     exit 0
     ;;
   *)

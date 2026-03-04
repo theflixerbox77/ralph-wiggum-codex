@@ -34,9 +34,9 @@ Required fields:
 - `evidence`: non-empty array of concrete evidence strings (prefer command/result pairs)
 - `next_step`: one highest-impact next step
 
-Optional fields:
-- `no_change_justification`: required when no scoped progress is detected
-- `completion_promise`: compatibility field used only when `--completion-promise` is configured
+Always-present fields:
+- `no_change_justification`: non-empty when no scoped progress is detected; otherwise empty string
+- `completion_promise`: compatibility field value only when `--completion-promise` is configured and status is `COMPLETE`; otherwise empty string
 
 The runner accepts completion only when:
 - `status` is `COMPLETE`

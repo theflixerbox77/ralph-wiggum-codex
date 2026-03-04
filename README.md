@@ -166,8 +166,8 @@ Each iteration asks Codex to emit exactly one JSON object conforming to `.codex/
 - `status`: `IN_PROGRESS`, `BLOCKED`, or `COMPLETE`
 - `evidence`: non-empty array of concrete command/result evidence
 - `next_step`: one highest-impact next step
-- `no_change_justification`: optional explanation when no scoped files changed
-- `completion_promise`: optional compatibility field (checked when `--completion-promise` is configured)
+- `no_change_justification`: required key; use a non-empty explanation when no scoped files changed, otherwise `""`
+- `completion_promise`: required key; use configured promise only when `--completion-promise` is set and status is `COMPLETE`, otherwise `""`
 
 ## Run Artifacts
 

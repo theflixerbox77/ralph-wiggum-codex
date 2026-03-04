@@ -58,6 +58,22 @@ run_loop() {
     "$SCRIPT" --codex-bin "$FIXTURE_PATH/codex" "$@"
 }
 
+schema_required_matches_properties() {
+  local schema_file="$1"
+  python3 - "$schema_file" <<'PY'
+import json
+import sys
+
+schema_path = sys.argv[1]
+with open(schema_path, "r", encoding="utf-8") as fh:
+    schema = json.load(fh)
+properties = set((schema.get("properties") or {}).keys())
+required = set(schema.get("required") or [])
+if properties != required:
+    raise SystemExit(1)
+PY
+}
+
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
@@ -83,6 +99,7 @@ make_repo "$repo_schema"
 expect_success "schema completion with change stops loop" run_loop schema_complete_change --cwd "$repo_schema" --state-dir "$state_schema" --prompt "ship it" --completion-promise "DONE" --max-iterations 3 >/dev/null
 expect_success "schema completion stop reason recorded" grep -q "schema_completion_detected" "$state_schema/run-summary.md"
 expect_success "codex jsonl artifact written" test -f "$state_schema/codex/iteration-1-attempt-1.jsonl"
+expect_success "completion schema required matches properties" schema_required_matches_properties "$state_schema/completion-schema.json"
 
 repo_invalid="$tmp_dir/repo-invalid"
 state_invalid="$repo_invalid/.codex/ralph-loop"

@@ -747,13 +747,13 @@ write_completion_schema() {
       "minLength": 1
     },
     "no_change_justification": {
-      "type": "string"
+      "type": ["string", "null"]
     },
     "completion_promise": {
-      "type": "string"
+      "type": ["string", "null"]
     }
   },
-  "required": ["status", "evidence", "next_step"],
+  "required": ["status", "evidence", "next_step", "no_change_justification", "completion_promise"],
   "additionalProperties": false
 }
 EOF_SCHEMA
@@ -1450,8 +1450,8 @@ Output contract:
   status: IN_PROGRESS | BLOCKED | COMPLETE
   evidence: non-empty array of concrete command/result evidence from this iteration
   next_step: exactly one highest-impact next step
-  no_change_justification: optional, required when no scoped files changed
-  completion_promise: optional compatibility field (required when configured as "$completion_promise" and status is COMPLETE)
+  no_change_justification: required key; use a non-empty explanation only when no scoped files changed, else use empty string
+  completion_promise: required key; use "$completion_promise" when configured and status is COMPLETE, else use empty string
 - Do not include any text outside the JSON object.
 EOF_PROMPT
 }

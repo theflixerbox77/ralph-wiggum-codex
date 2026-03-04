@@ -115,8 +115,8 @@ Schema fields:
 - `status`: `IN_PROGRESS`, `BLOCKED`, `COMPLETE`
 - `evidence`: non-empty array of concrete evidence
 - `next_step`: one highest-impact next step
-- `no_change_justification`: optional
-- `completion_promise`: optional compatibility field
+- `no_change_justification`: required key; non-empty only for justified no-change iterations, else empty string
+- `completion_promise`: required key; compatibility value when configured, else empty string
 
 ## Core Files
 

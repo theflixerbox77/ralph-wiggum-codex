@@ -123,9 +123,9 @@ Required fields:
 - `evidence`: non-empty array of concrete evidence strings
 - `next_step`: one highest-impact next step
 
-Optional fields:
-- `no_change_justification`: required when no scoped progress was detected
-- `completion_promise`: only required when `--completion-promise` is configured
+Always-present fields:
+- `no_change_justification`: use a non-empty explanation when no scoped progress was detected; otherwise use `""`
+- `completion_promise`: use configured promise only when `--completion-promise` is set and status is `COMPLETE`; otherwise use `""`
 
 Completion is accepted only when:
 - `status` is `COMPLETE`
@@ -225,4 +225,3 @@ Effective usage:
   --cwd /repo \
   --resume
 ```
-
