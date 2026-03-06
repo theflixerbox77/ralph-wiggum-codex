@@ -1,15 +1,24 @@
-# Ralph Wiggum Codex Skill
+# Ralph Wiggum Codex Skills
 
-Ralph-style long-running autonomous refinement for Codex, packaged as an installable skill.
+Ralph-style long-running autonomous refinement for Codex, packaged as installable skills.
 
 `ralph-wiggum-codex` is a Codex skill for iterative coding loops that continuously refine work until validation passes and completion criteria are met.
 
+Primary use: point Ralph at a repo, give it a concrete objective, and give it at least one validation command. Everything else is optional guardrail tuning.
+
+## Repo Contents
+
+This repo ships two Codex skills, not two plugins:
+
+- `ralph-wiggum-codex`: the long-running implement -> validate -> refine loop
+- `ralph-prompt-generator`: the staged prompt-improver companion that saves planning, draft, and final prompt files before handing off to Ralph
+
 ## What This Is
 
-This is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a Codex-native skill with:
-- `SKILL.md` instructions for skill invocation
-- optional `agents/openai.yaml` metadata and invocation policy
-- a deterministic loop runner script used by the skill for reliable long runs
+This repo is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a Codex-native skill package with:
+- `SKILL.md` instructions for each skill
+- optional `agents/openai.yaml` metadata and invocation policy for each skill
+- a deterministic loop runner script used by `ralph-wiggum-codex` for reliable long runs
 
 ## Core Capabilities
 
@@ -27,65 +36,38 @@ This is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a 
 - Watchdog timeouts with controlled retries (`--idle-timeout-seconds`, `--hard-timeout-seconds`, `--timeout-retries`)
 - Resume support and stale-lock recovery with metadata (`--reclaim-stale-lock`)
 
-## Companion Prompt Generator
+## Optional Prompt Generator
 
-This repo also includes `ralph-prompt-generator`, a companion skill that converts rough requests into execution-ready prompts for `$ralph-wiggum-codex`.
+This repo also includes `ralph-prompt-generator`, a companion skill that turns rough prompts into a staged prompt-improvement workflow for `$ralph-wiggum-codex`.
 
 Use the companion when:
 - The objective is ambiguous or underspecified.
-- You want model/reasoning defaults chosen for you.
-- You want loop flags pre-synthesized before starting a long run.
+- You want critique, revision, and explicit review checkpoints before starting a long run.
+- You want a saved production-ready prompt file rather than an inline flags-first handoff.
 
 Example input:
 
 ```text
 $ralph-prompt-generator
+<user_prompt>
 Refactor auth middleware and prevent regressions.
+</user_prompt>
 ```
 
-Example generated output block:
+Workflow shape:
 
-```text
-/skills
-$ralph-wiggum-codex
-Run this in: /path/to/repo
-Objective: Refactor auth middleware while preserving behavior.
-Constraints:
-- Keep public API behavior unchanged.
-- Avoid unrelated refactors.
-Non-goals:
-- No new auth features.
-Success criteria:
-- Tests pass and behavior is preserved.
-Validation:
-- npm run lint
-- npm run test -- auth
-Progress scope:
-- "src/auth/"
-Recommended model: gpt-5.3-codex
-Reasoning effort: high
-Suggested runner flags:
---autonomy-level l2
---max-iterations 24
---max-consecutive-failures 3
---max-stagnant-iterations 4
---progress-scope "src/auth/"
---idle-timeout-seconds 900
---hard-timeout-seconds 5400
---timeout-retries 1
---events-format both
---progress-artifact
---validate-cmd "npm run lint"
---validate-cmd "npm run test -- auth"
-```
+- Phase A: planning only, save `docs/prompt-improver-spec/artifacts/implementation_plan.md` and `docs/prompt-improver-spec/artifacts/task.md`, then pause for review after Steps 1-2
+- Phase B: draft only, save `docs/prompt-improver-spec/final-prompts/<prompt-name>-draft.md`
+- Phase C: critique and revision planning only, append to `implementation_plan.md`, then pause again after Step 4
+- Phase D: save `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`, delete the draft, write `docs/prompt-improver-spec/artifacts/walkthrough.md`, and return a short Ralph invocation snippet that points at the saved prompt file
 
 Relationship to `ralph-wiggum-codex`:
-- `ralph-prompt-generator` optimizes briefing/configuration.
+- `ralph-prompt-generator` improves the prompt itself and saves the review artifacts.
 - `ralph-wiggum-codex` runs the autonomous refinement loop.
 
 ## Install
 
-### Option 1: Codex Skill Installer (recommended)
+### Option 1: Install the loop skill (recommended)
 
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
@@ -95,29 +77,36 @@ python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-githu
 
 Restart Codex after install.
 
-### Option 2: Manual Install
+### Option 2: Install the prompt-improver companion
+
+```bash
+python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo MattMagg/ralph-wiggum-codex \
+  --path skills/ralph-prompt-generator
+```
+
+Restart Codex after install.
+
+### Option 3: Manual install one or both skills
 
 ```bash
 mkdir -p ~/.codex/skills
 cp -R skills/ralph-wiggum-codex ~/.codex/skills/
+cp -R skills/ralph-prompt-generator ~/.codex/skills/
 ```
 
 Restart Codex after install.
 
 ## Use It As A Skill (Primary)
 
-This skill is configured for explicit invocation (`allow_implicit_invocation: false`), so call it directly:
+Call the skill directly:
 
 ```text
 $ralph-wiggum-codex
 Run this in /path/to/repo.
 Objective: implement X with tests.
 Validation:
-- npm run lint
 - npm run test
-Completion promise (compatibility mode): DONE
-Max iterations: 40
-Max stagnant iterations: 6
 ```
 
 The skill will set up and run the loop under `.codex/ralph-loop/`.
@@ -130,9 +119,6 @@ The skill will set up and run the loop under `.codex/ralph-loop/`.
   --codex-bin codex \
   --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
   --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
-  --events-format both \
-  --progress-artifact \
-  --completion-promise "DONE" \
   --max-iterations 40 \
   --max-stagnant-iterations 6 \
   --progress-scope "src/" \
@@ -143,7 +129,7 @@ The skill will set up and run the loop under `.codex/ralph-loop/`.
   --validate-cmd "npm run test"
 ```
 
-`--completion-promise` is still supported for compatibility but deprecated. Completion is accepted from schema-conformant JSON output (`status=COMPLETE`) plus passing validations.
+`--completion-promise` is still supported for compatibility but deprecated. Most users should leave it unset.
 
 Resume:
 
@@ -161,13 +147,16 @@ touch /path/to/repo/.codex/ralph-loop/STOP
 
 ## Final Message JSON Contract
 
-Each iteration asks Codex to emit exactly one JSON object conforming to `.codex/ralph-loop/completion-schema.json`:
+Each iteration asks Codex to emit exactly one JSON object conforming to `.codex/ralph-loop/completion-schema.json`.
 
+Required fields:
 - `status`: `IN_PROGRESS`, `BLOCKED`, or `COMPLETE`
 - `evidence`: non-empty array of concrete command/result evidence
 - `next_step`: one highest-impact next step
-- `no_change_justification`: required key; use a non-empty explanation when no scoped files changed, otherwise `""`
-- `completion_promise`: required key; use configured promise only when `--completion-promise` is set and status is `COMPLETE`, otherwise `""`
+
+Optional fields:
+- `no_change_justification`: include when no scoped files changed and the iteration is legitimately a no-op
+- `completion_promise`: include only when `--completion-promise` is set
 
 ## Run Artifacts
 
@@ -195,6 +184,7 @@ skills/ralph-prompt-generator/
   agents/openai.yaml
   references/
     prompt-improver-principles.md
+    prompt-improver-workflow-codex.md
     openai-codex-prompting-2026.md
     ralph-flag-selection-matrix.md
 skills/ralph-wiggum-codex/
@@ -207,6 +197,10 @@ skills/ralph-wiggum-codex/
     reliability-vnext.md
 docs/
   configuration.md
+  prompt-improver-spec/
+    README.md
+    artifacts/
+    final-prompts/
   ralph-prompt-generator.md
 ```
 
@@ -219,7 +213,27 @@ This repo runs:
 ## Docs
 
 - `docs/configuration.md`: complete flag reference and effective usage patterns for the runner.
-- `docs/ralph-prompt-generator.md`: companion-skill workflow, examples, and handoff pattern.
+- `docs/ralph-prompt-generator.md`: staged prompt-improver workflow, checkpoints, and final prompt delivery pattern.
+- `docs/prompt-improver-spec/README.md`: workspace layout for prompt-improver artifacts, drafts, and final prompts.
+- `docs/releases.md`: release order, versioning policy, and why this repo uses GitHub Releases instead of GitHub Packages.
+
+## Releases
+
+Use GitHub Releases for this repo.
+
+Recommended versioning:
+- stay on pre-1.0 semver for now
+- use minor bumps for meaningful skill or workflow milestones
+- use patch bumps for fixes and docs-only release prep
+
+Recommended first tag: `v0.8.0`
+
+Rationale:
+- the repo already has substantial development history
+- the public skill contracts are still evolving
+- `v1.0.0` would imply a stronger stability promise than the repo currently makes
+
+GitHub Packages is not currently applicable because this repo does not publish a package artifact such as an npm package, Python package, container image, or GitHub Action.
 
 ## Search Keywords
 

@@ -34,9 +34,9 @@ Required fields:
 - `evidence`: non-empty array of concrete evidence strings (prefer command/result pairs)
 - `next_step`: one highest-impact next step
 
-Always-present fields:
-- `no_change_justification`: non-empty when no scoped progress is detected; otherwise empty string
-- `completion_promise`: compatibility field value only when `--completion-promise` is configured and status is `COMPLETE`; otherwise empty string
+Optional fields:
+- `no_change_justification`: include when no scoped progress is detected and the iteration is a justified no-op
+- `completion_promise`: include only when `--completion-promise` is configured and status is `COMPLETE`
 
 The runner accepts completion only when:
 - `status` is `COMPLETE`

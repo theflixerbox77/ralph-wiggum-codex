@@ -1,6 +1,6 @@
 # Prompt Improver Principles
 
-Curated principles for turning rough requests into high-signal execution briefs.
+Curated principles for turning rough prompts into staged, repo-backed improvements for `ralph-prompt-generator`.
 
 ## Source Basis
 
@@ -13,6 +13,13 @@ Distilled from the prompt-improver workflows:
 Clarify, do not prescribe.
 
 The generator improves task framing, constraints, and verification criteria. It should not pre-complete work that the downstream coding agent should discover or implement.
+
+## Workflow Posture
+
+- Prompt improvement comes first; Ralph-specific config comes last.
+- Save planning, draft, and final outputs in the repo-backed prompt-improver workspace.
+- Reuse earlier artifacts during later phases instead of redoing analysis from scratch.
+- Pause at explicit review checkpoints after Steps 1-2 and after Step 4.
 
 ## Rewrite Checklist (Practical)
 
@@ -54,11 +61,9 @@ Ask questions only when ambiguity changes execution behavior:
 
 If ambiguity is non-critical, proceed with explicit assumptions.
 
-## Suggested Output Policy
+## Final Ralph Wrapper Policy
 
-Always ask whether to include a suggested output section.
-
-If included:
-- Keep it optional and flexible.
-- Do not conflict with Ralph's schema-based completion contract.
-- Prefer suggestions like what to include in `evidence` over rigid report schemas.
+When the prompt itself is finished:
+- point `$ralph-wiggum-codex` at the saved production-ready prompt file
+- add model or flag guidance only when it materially improves the run
+- keep the wrapper short; do not restate the full prompt inline

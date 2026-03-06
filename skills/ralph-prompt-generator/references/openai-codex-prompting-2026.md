@@ -1,23 +1,25 @@
 # OpenAI + Codex Prompting Notes (2026)
 
-Last verified: February 25, 2026.
+Last verified: March 6, 2026.
 
 This file captures the prompt-engineering and model-selection assumptions used by `ralph-prompt-generator`.
 
+Treat this as a secondary reference. Prompt improvement and constraint preservation come first; model or profile guidance only belongs in the final Ralph wrapper when it materially helps execution.
+
 ## Model Selection Defaults
 
-- Codex sessions: default `gpt-5.3-codex`.
-  - Recommended for most coding tasks in Codex surfaces.
-  - API access is not generally available yet.
+- Codex sessions: prefer the current Codex default model unless the user explicitly wants a pinned model.
+  - As of March 6, 2026, the newest model powering Codex and Codex CLI is `gpt-5.4`.
+  - Pinning is optional; omit the model line when the current Codex default is sufficient.
 
-- API-oriented runs: default `gpt-5.2-codex`.
-  - Available via API.
+- API-oriented runs: prefer `gpt-5-codex` when the user wants a pinned coding model.
+  - Use `gpt-5.4` instead when the workflow spans coding plus broader planning/writing tasks.
 
 If the user explicitly requests a different model, preserve it.
 
 ## Reasoning Effort
 
-The generator emits a `Reasoning effort: <medium|high|xhigh>` recommendation.
+If the final Ralph wrapper includes a `Reasoning effort: <medium|high|xhigh>` recommendation, use this guidance:
 
 Guidance:
 - `medium`: narrow, low-ambiguity tasks.
@@ -53,7 +55,7 @@ model_reasoning_effort = "high"
 model_reasoning_effort = "xhigh"
 ```
 
-If you use profiles, the generator can recommend `--profile ralph_high` / `--profile ralph_xhigh` in the handoff block.
+If you use profiles, the generator can recommend `--profile ralph_high` / `--profile ralph_xhigh` in the final Ralph invocation snippet.
 
 ## Source Anchors
 

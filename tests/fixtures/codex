@@ -26,6 +26,7 @@ printf '%s\n' "$call_count" > "$count_file"
 
 cwd=""
 output_last_message=""
+output_schema=""
 prompt=""
 
 while [[ $# -gt 0 ]]; do
@@ -39,6 +40,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --output-schema)
+      output_schema="${2:-}"
       shift 2
       ;;
     --json|--experimental-json|--full-auto|--dangerously-bypass-approvals-and-sandbox|--yolo)
@@ -68,6 +70,30 @@ write_last_message() {
   fi
 }
 
+validate_written_message() {
+  if [[ -z "$output_last_message" || -z "$output_schema" ]]; then
+    return 0
+  fi
+
+  python3 - "$output_last_message" "$output_schema" <<'PY'
+import json
+import sys
+
+message_path, schema_path = sys.argv[1:3]
+
+with open(message_path, "r", encoding="utf-8") as fh:
+    payload = json.load(fh)
+
+with open(schema_path, "r", encoding="utf-8") as fh:
+    schema = json.load(fh)
+
+required = schema.get("required") or []
+missing = [key for key in required if key not in payload]
+if missing:
+    raise SystemExit(f"missing required keys: {','.join(missing)}")
+PY
+}
+
 touch_progress_file() {
   if [[ -n "$cwd" ]]; then
     printf 'progress %s\n' "$(date -u +%s)" > "$cwd/progress.txt"
@@ -86,22 +112,33 @@ case "$scenario" in
     emit_json_event "complete"
     touch_progress_file
     write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"implemented change\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
+    validate_written_message
+    exit 0
+    ;;
+  schema_complete_change_minimal)
+    emit_json_event "complete minimal"
+    touch_progress_file
+    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"implemented change\"],\"next_step\":\"NONE\"}"
+    validate_written_message
     exit 0
     ;;
   schema_complete_nochange)
     emit_json_event "complete without change"
     write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"reviewed constraints\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
+    validate_written_message
     exit 0
     ;;
   schema_complete_nochange_justified)
     emit_json_event "complete with no-change justification"
     write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"no edits required\"],\"next_step\":\"NONE\",\"no_change_justification\":\"Repository already satisfied objective\",\"completion_promise\":\"$completion_promise_value\"}"
+    validate_written_message
     exit 0
     ;;
   schema_in_progress)
     emit_json_event "in progress"
     touch_progress_file
     write_last_message "{\"status\":\"IN_PROGRESS\",\"evidence\":[\"partial implementation\"],\"next_step\":\"Finish tests\",\"no_change_justification\":\"\",\"completion_promise\":\"\"}"
+    validate_written_message
     exit 0
     ;;
   invalid_json)

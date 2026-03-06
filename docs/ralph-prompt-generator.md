@@ -1,112 +1,125 @@
 # Ralph Prompt Generator
 
-`ralph-prompt-generator` is the companion skill that turns a rough coding request into an execution-ready prompt block for `$ralph-wiggum-codex`.
+`ralph-prompt-generator` is the companion skill that turns a rough prompt into a saved, production-ready prompt for `$ralph-wiggum-codex`.
 
-It standardizes prompt structure, preserves constraints, selects model + reasoning effort defaults, and proposes loop guardrails so long-running Ralph sessions start with better instructions.
+This repo ships two Codex skills; this page documents the prompt-improver companion, not the execution loop itself.
 
-## When To Use
+It now follows a four-phase conversation model instead of emitting a one-shot runner block. Prompt improvement is primary; Ralph-specific execution wrapping is secondary.
 
-Use `$ralph-prompt-generator` first when:
-- The objective is incomplete or ambiguous.
-- You want explicit model/reasoning/flag recommendations.
-- You want a reusable prompt block for future runs.
+## Inputs
 
-Skip it when you already have a fully formed Ralph handoff prompt with validated settings.
+Primary source prompt:
+- `<user_prompt>`
+
+Optional supporting context:
+- `<examples>`
+- `<feedback>`
+
+## Workspace
+
+The generator writes repo-backed outputs to:
+- `docs/prompt-improver-spec/artifacts/implementation_plan.md`
+- `docs/prompt-improver-spec/artifacts/task.md`
+- `docs/prompt-improver-spec/artifacts/walkthrough.md`
+- `docs/prompt-improver-spec/final-prompts/<prompt-name>-draft.md`
+- `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`
+
+The draft file exists only during the workflow and is removed after the final prompt is created.
 
 ## Workflow
 
-1. Provide your raw objective.
-2. The generator always asks:
-   - `Do you want a suggested output section included in the generated prompt?`
-3. It asks additional questions only if required (cwd, validations, scopes, success criteria).
-4. It emits one final markdown code block that starts with:
-   - `/skills`
-   - `$ralph-wiggum-codex`
-5. You paste/run that generated block as your Ralph invocation prompt.
+### Phase A
 
-## Optional Auto-Discovery
+Steps 1-2: planning only.
 
-If you did not provide validation commands, the generator may infer likely candidates by scanning repo metadata (for example `package.json` scripts) and then ask you to confirm before finalizing.
+- Analyze the source prompt.
+- Normalize examples.
+- Quote unclear language.
+- Preserve hard constraints.
+- Save planning artifacts.
+- Pause at a native Codex review checkpoint after Steps 1-2.
 
-## Output Contract
+### Phase B
 
-Final output must be exactly one fenced markdown code block containing:
-- `/skills`
-- `$ralph-wiggum-codex`
-- An optimized objective/constraints/validation structure
-- Recommended model and reasoning effort
-- Recommended loop settings (`--autonomy-level`, iteration limits, progress scopes, timeouts, retries, and validation commands)
+Step 3: initial draft only.
 
-## Example
+- Reuse the saved planning artifacts.
+- Write `docs/prompt-improver-spec/final-prompts/<prompt-name>-draft.md`.
+- Update the task checklist.
+- End with the draft path plus clarifying questions if any remain.
+
+### Phase C
+
+Step 4: critique and revision planning only.
+
+- Read the draft prompt.
+- Append the critique and revision plan to `implementation_plan.md`.
+- Update the task checklist.
+- Pause at a second native Codex review checkpoint after Step 4.
+
+### Phase D
+
+Steps 5-6: revision, final polish, and delivery.
+
+- Save `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`.
+- Delete `docs/prompt-improver-spec/final-prompts/<prompt-name>-draft.md`.
+- Write `walkthrough.md`.
+- Finish with the required completion message and a short Ralph-ready invocation snippet.
+
+## Output Shape
+
+The final result is a prompt file plus short Ralph invocation snippet.
+
+That means:
+- the prompt itself lives in `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`
+- the chat response confirms completion and points Ralph at that saved file
+- optional model/flag suggestions only appear when they materially improve the eventual Ralph run
+
+## Example Flow
 
 ### Example input
 
 ```text
 $ralph-prompt-generator
+<user_prompt>
 Refactor auth middleware and prevent regressions.
+</user_prompt>
 ```
 
-### Example generated output
+### Phase A checkpoint
 
-```text
-/skills
-$ralph-wiggum-codex
-Run this in: /path/to/repo
-Objective: Refactor auth middleware for maintainability while preserving behavior.
-Constraints:
-- Keep public API behavior unchanged.
-- Avoid unrelated refactors.
-Non-goals:
-- No new auth features.
-Success criteria:
-- Existing auth behavior preserved and tests pass.
-Validation:
-- npm run lint
-- npm run test -- auth
-Progress scope:
-- "src/auth/"
-Recommended model: gpt-5.3-codex
-Reasoning effort: high
-Risk profile: medium (auth-sensitive)
-Suggested runner flags:
---autonomy-level l2
---max-iterations 24
---max-consecutive-failures 3
---max-stagnant-iterations 4
---progress-scope "src/auth/"
---idle-timeout-seconds 900
---hard-timeout-seconds 5400
---timeout-retries 1
---events-format both
---progress-artifact
---validate-cmd "npm run lint"
---validate-cmd "npm run test -- auth"
-```
+- Saves `implementation_plan.md`
+- Saves `task.md`
+- Pauses for review after Steps 1-2
 
-## Recurring Usage Patterns
+### Phase B checkpoint
 
-1. Feature delivery kickoff
-- Convert product requirements into a testable engineering objective with explicit validations.
+- Saves `docs/prompt-improver-spec/final-prompts/auth-middleware-refactor-draft.md`
+- Returns the draft path and any clarifying questions
 
-2. Bugfix hardening
-- Enforce regression validation and tighter iteration caps.
+### Final delivery
 
-3. Cross-service migration
-- Select `xhigh` reasoning and stronger timeout/stagnation guardrails before long unattended runs.
+- Saves `docs/prompt-improver-spec/final-prompts/auth-middleware-refactor.md`
+- Removes the draft file
+- Writes `walkthrough.md`
+- Returns `All 6 Steps Complete.`
+- Returns a prompt file plus short Ralph invocation snippet
 
 ## Relationship To Ralph Loop Skill
 
-- `ralph-prompt-generator` optimizes briefing and configuration.
+- `ralph-prompt-generator` improves and finalizes the prompt briefing.
 - `ralph-wiggum-codex` executes the autonomous refinement loop.
 
 Recommended sequence:
-1. `$ralph-prompt-generator`
-2. Run the generated `$ralph-wiggum-codex` block
+1. Run `$ralph-prompt-generator`.
+2. Review the saved checkpoints when prompted.
+3. Run the final prompt with `$ralph-wiggum-codex`.
 
 ## References
 
 - `skills/ralph-prompt-generator/SKILL.md`
 - `skills/ralph-prompt-generator/references/prompt-improver-principles.md`
+- `skills/ralph-prompt-generator/references/prompt-improver-workflow-codex.md`
 - `skills/ralph-prompt-generator/references/openai-codex-prompting-2026.md`
 - `skills/ralph-prompt-generator/references/ralph-flag-selection-matrix.md`
-- `skills/ralph-wiggum-codex/SKILL.md`
+- `docs/prompt-improver-spec/README.md`

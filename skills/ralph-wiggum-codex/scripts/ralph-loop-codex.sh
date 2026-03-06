@@ -753,7 +753,7 @@ write_completion_schema() {
       "type": ["string", "null"]
     }
   },
-  "required": ["status", "evidence", "next_step", "no_change_justification", "completion_promise"],
+  "required": ["status", "evidence", "next_step"],
   "additionalProperties": false
 }
 EOF_SCHEMA
@@ -1302,10 +1302,16 @@ run_codex_exec_with_watchdog() {
   if [[ -n "$attempt_timeout_reason" ]]; then
     warn "codex exec timed out (reason=$attempt_timeout_reason, attempt=$attempt)"
     log_event "codex_timeout" "attempt=$attempt;reason=$attempt_timeout_reason;jsonl=$attempt_jsonl"
-    kill -- -"$codex_pid" 2>/dev/null || kill "$codex_pid" 2>/dev/null || true
-    sleep 1
-    kill -9 "$codex_pid" 2>/dev/null || true
+    kill -TERM -- -"$codex_pid" 2>/dev/null || kill -TERM "$codex_pid" 2>/dev/null || true
+    (
+      sleep 1
+      kill -0 "$codex_pid" 2>/dev/null || exit 0
+      kill -KILL -- -"$codex_pid" 2>/dev/null || kill -KILL "$codex_pid" 2>/dev/null || true
+    ) &
+    local killer_pid=$!
     wait "$codex_pid" 2>/dev/null || true
+    kill "$killer_pid" 2>/dev/null || true
+    wait "$killer_pid" 2>/dev/null || true
     return 124
   fi
 
@@ -1414,6 +1420,13 @@ build_iteration_prompt() {
   local progress_scope_block
   progress_scope_block="$(build_progress_scope_block)"
 
+  local completion_promise_instruction
+  if [[ -n "$completion_promise" ]]; then
+    completion_promise_instruction="  completion_promise: include \"$completion_promise\" only when status is COMPLETE"
+  else
+    completion_promise_instruction="  completion_promise: omit unless compatibility mode is explicitly enabled"
+  fi
+
   cat <<EOF_PROMPT
 Ralph Loop for Codex
 Run ID: $run_id
@@ -1446,12 +1459,13 @@ $feedback_block
 
 Output contract:
 - Respond with EXACTLY one JSON object matching completion-schema.json.
-- Fields:
+- Required fields:
   status: IN_PROGRESS | BLOCKED | COMPLETE
   evidence: non-empty array of concrete command/result evidence from this iteration
   next_step: exactly one highest-impact next step
-  no_change_justification: required key; use a non-empty explanation only when no scoped files changed, else use empty string
-  completion_promise: required key; use "$completion_promise" when configured and status is COMPLETE, else use empty string
+- Optional fields:
+  no_change_justification: include only when no scoped files changed and completion would otherwise look like a no-op
+$completion_promise_instruction
 - Do not include any text outside the JSON object.
 EOF_PROMPT
 }

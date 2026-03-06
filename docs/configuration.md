@@ -3,10 +3,15 @@
 This document describes every configuration option for the Ralph loop runner:
 `skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh`.
 
-There are two ways to use Ralph:
+This document is runner-specific. If the prompt itself still needs critique, drafting, and revision, use `ralph-prompt-generator` first and see:
+- `docs/ralph-prompt-generator.md`
+- `docs/prompt-improver-spec/README.md`
 
-1. As a Codex skill: `$ralph-wiggum-codex` (recommended).
-2. By running the runner script directly (advanced operators).
+There are three common ways to use the repo:
+
+1. Use `ralph-prompt-generator`, review the saved prompt-improver artifacts, then run the final prompt with `$ralph-wiggum-codex`.
+2. Use `$ralph-wiggum-codex` directly when the objective is already clear (recommended default).
+3. Run the runner script directly (advanced operators).
 
 The runner is intentionally a single script with mechanical guardrails:
 - schema-based completion contract
@@ -68,7 +73,7 @@ Key defaults (from the runner):
 - `--objective-file <file>`: objective is reloaded every iteration; best for long runs.
 - `--feedback-file <file>`: optional operator steering; read every iteration (defaults to `<state-dir>/feedback.md`).
 - `--resume`: resume from existing state in `--state-dir`. Do not combine with `--prompt` or `--prompt-file`.
-- `--completion-promise <text>`: deprecated compatibility check; if set, the final-message JSON must include `completion_promise` matching this value.
+- `--completion-promise <text>`: deprecated compatibility check; if set, the runner verifies `completion_promise` when that optional field is present in the final JSON.
 - `--max-iterations <n>`: stop after `n` iterations. `0` means unbounded (requires `--allow-unbounded`).
 - `--allow-unbounded`: required when `--max-iterations 0`.
 - `--max-consecutive-failures <n>`: stop after `n` consecutive `codex exec` failures.
@@ -123,9 +128,9 @@ Required fields:
 - `evidence`: non-empty array of concrete evidence strings
 - `next_step`: one highest-impact next step
 
-Always-present fields:
-- `no_change_justification`: use a non-empty explanation when no scoped progress was detected; otherwise use `""`
-- `completion_promise`: use configured promise only when `--completion-promise` is set and status is `COMPLETE`; otherwise use `""`
+Optional fields:
+- `no_change_justification`: include a non-empty explanation only when no scoped progress was detected
+- `completion_promise`: include only when `--completion-promise` is set and status is `COMPLETE`
 
 Completion is accepted only when:
 - `status` is `COMPLETE`

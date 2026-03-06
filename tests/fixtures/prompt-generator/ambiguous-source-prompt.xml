@@ -1,0 +1,14 @@
+<user_prompt>
+Improve this coding prompt for a redesign task. Keep the constraints, but make it clearer.
+</user_prompt>
+
+<examples>
+  <example>
+    <input>Redesign the dashboard.</input>
+    <ideal_output>A prompt that clarifies scope, constraints, and expected output without pre-solving the design.</ideal_output>
+  </example>
+</examples>
+
+<feedback>
+Make the prompt more structured, but do not over-specify the implementation.
+</feedback>

@@ -1,6 +1,6 @@
 ---
 name: ralph-wiggum-codex
-description: Use when a coding task needs multi-iteration autonomous refinement with explicit completion criteria, validation commands, resumable loop state, and long-running progress control.
+description: Use when a coding task needs repeated implement-validate-fix cycles with clear stop conditions and resumable state.
 ---
 
 # Ralph Wiggum For Codex
@@ -23,26 +23,24 @@ Do not use this skill when:
 - No meaningful validation loop exists.
 - The user wants manual step-by-step control each turn.
 
-## Companion Prompt Generator (Recommended Handoff)
+## Optional Prompt Generator
 
-When objectives are ambiguous or missing loop configuration, invoke `$ralph-prompt-generator` first to produce a ready-to-run block for this skill.
+When the objective or guardrails are genuinely unclear, invoke `$ralph-prompt-generator` first to run the staged prompt-improver workflow for this skill.
 
 Use the companion first when:
 - Validation commands are unknown or incomplete.
 - Scope/progress paths are unclear.
-- Model/reasoning/iteration caps are not specified.
-- The task is high risk and you want stronger guardrails before execution.
+- The task is high risk and you want critique, revision, and review checkpoints before execution.
+- You want the prompt saved as a reusable file in the repo.
 
 Companion handoff pattern:
 1. Run `$ralph-prompt-generator` with the raw request.
-2. Answer its required question about suggested output sections.
-3. Confirm any inferred validations/scopes it proposes (or provide your own).
-4. Provide any additional targeted clarifications it requests.
-5. Execute the generated block, which should start with:
-   - `/skills`
-   - `$ralph-wiggum-codex`
+2. Review the saved planning artifacts after Steps 1-2.
+3. Review the saved critique after Step 4.
+4. Use the final prompt saved at `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`.
+5. Run the short Ralph-ready invocation snippet it returns at the end.
 
-You can skip the companion when you already have a complete, validated prompt with explicit flags and checks.
+Skip the companion when the task is already clear enough to run directly.
 
 ## Skill-First Operating Contract
 
@@ -53,11 +51,13 @@ When this skill is invoked, execute this flow:
 - Objective text
 - Validation commands (fastest checks first)
 - Progress scopes (`--progress-scope`) for meaningful edits
-- Codex runtime binary/path (`--codex-bin`) for deterministic runtime selection
-- Event stream artifact format (`--events-format <tsv|jsonl|both>`, default `both`)
-- Whether to persist per-iteration progress artifacts (`--progress-artifact`)
 - Runtime caps (`max-iterations`, `max-stagnant-iterations`, timeout settings)
-- Completion promise only if compatibility mode is required (deprecated)
+- Only pin `codex-bin`, `model`, `profile`, or compatibility fields when the user or environment actually needs them
+
+Default posture:
+- Prefer the simplest workable invocation.
+- Infer missing validations/scopes from repo context when practical.
+- Do not force the companion generator or advanced flags when the task is already clear.
 
 2. Prepare loop files under `<cwd>/.codex/ralph-loop/`:
 - `objective.md` (objective to reload every iteration)
@@ -77,9 +77,6 @@ When this skill is invoked, execute this flow:
   --codex-bin codex \
   --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
   --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
-  --events-format both \
-  --progress-artifact \
-  --completion-promise "DONE" \
   --max-iterations 40 \
   --max-stagnant-iterations 6 \
   --progress-scope "src/" \
@@ -115,8 +112,8 @@ Schema fields:
 - `status`: `IN_PROGRESS`, `BLOCKED`, `COMPLETE`
 - `evidence`: non-empty array of concrete evidence
 - `next_step`: one highest-impact next step
-- `no_change_justification`: required key; non-empty only for justified no-change iterations, else empty string
-- `completion_promise`: required key; compatibility value when configured, else empty string
+- `no_change_justification` (optional): include only for justified no-change iterations
+- `completion_promise` (optional): include only when compatibility mode is enabled
 
 ## Core Files
 

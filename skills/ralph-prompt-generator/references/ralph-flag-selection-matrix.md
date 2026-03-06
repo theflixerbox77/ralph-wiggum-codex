@@ -2,6 +2,8 @@
 
 This reference is for synthesizing `ralph-loop-codex.sh` settings used by `$ralph-wiggum-codex`.
 
+Treat it as a secondary reference for `ralph-prompt-generator`. Do not let runner flags dominate the prompt-improver workflow, and omit them entirely when the runner defaults are already good enough.
+
 ## Runner Defaults (For Context)
 
 Key defaults from the runner (unless overridden):
@@ -15,9 +17,9 @@ Key defaults from the runner (unless overridden):
 - `--events-format`: both
 - `--progress-scope`: `.`
 
-## Always-On Recommendations
+## Optional Observability Recommendations
 
-Unless the user explicitly overrides:
+Use these only when unattended runs, debugging, or artifact collection matter:
 - `--events-format both`
 - `--progress-artifact`
 
@@ -27,10 +29,10 @@ Choose the smallest profile that fits the task.
 
 | Profile | Typical signals | Autonomy | Model | Reasoning | Iterations | Failures | Stagnant | Idle | Hard | Retries |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---:|
-| `quick-fix` | single-file bugfix, low risk, clear validation | `l1` | `gpt-5.3-codex` | `medium` | 12 | 2 | 3 | 600 | 3600 | 0 |
-| `standard-feature` | one module/service, moderate change | `l2` | `gpt-5.3-codex` | `high` | 24 | 3 | 4 | 900 | 5400 | 1 |
-| `complex-change` | multi-step change, multiple modules, refactor risk | `l2` | `gpt-5.3-codex` | `high` | 40 | 3 | 6 | 900 | 7200 | 1 |
-| `high-risk` | migration, cross-system change, incident-level sensitivity | `l1` (start) | `gpt-5.3-codex` (Codex) or `gpt-5.2-codex` (API) | `xhigh` | 60 | 3 | 8 | 1200 | 10800 | 2 |
+| `quick-fix` | single-file bugfix, low risk, clear validation | `l1` | `current Codex default` | `medium` | 12 | 2 | 3 | 600 | 3600 | 0 |
+| `standard-feature` | one module/service, moderate change | `l2` | `current Codex default` | `high` | 24 | 3 | 4 | 900 | 5400 | 1 |
+| `complex-change` | multi-step change, multiple modules, refactor risk | `l2` | `current Codex default` | `high` | 40 | 3 | 6 | 900 | 7200 | 1 |
+| `high-risk` | migration, cross-system change, incident-level sensitivity | `l1` (start) | `gpt-5.4` (Codex) or `gpt-5-codex` (API) | `xhigh` | 60 | 3 | 8 | 1200 | 10800 | 2 |
 
 Notes:
 - `Reasoning` is a recommendation for the session/config; it is not a runner flag.

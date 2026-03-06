@@ -1,7 +1,7 @@
 interface:
   display_name: "Ralph Prompt Generator"
-  short_description: "Optimize prompts for Ralph loop runs"
-  default_prompt: "Use $ralph-prompt-generator to convert my rough coding request into an execution-ready $ralph-wiggum-codex prompt with model, reasoning effort, and loop flags."
+  short_description: "Run a staged prompt-improvement workflow for Ralph prompts"
+  default_prompt: "Use $ralph-prompt-generator to run a staged prompt-improvement workflow that turns my rough prompt into a saved production-ready prompt file for $ralph-wiggum-codex plus a short Ralph invocation snippet."
 
 policy:
   allow_implicit_invocation: false

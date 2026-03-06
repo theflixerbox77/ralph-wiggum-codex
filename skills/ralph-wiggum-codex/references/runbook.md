@@ -1,5 +1,16 @@
 # Runbook
 
+## Companion Prompt-Generator Path
+
+If the prompt itself is still rough, start with `$ralph-prompt-generator` instead of forcing loop flags too early.
+
+Recommended flow:
+- provide `<user_prompt>` and optional `<examples>` / `<feedback>`
+- review `docs/prompt-improver-spec/artifacts/implementation_plan.md` after Steps 1-2
+- review the critique appended to `implementation_plan.md` after Step 4
+- use the final prompt saved at `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`
+- run the short Ralph-ready invocation snippet returned at the end
+
 ## Primary Usage (Skill Invocation)
 
 Use this skill via `$ralph-wiggum-codex` and let Codex orchestrate the loop.
@@ -9,11 +20,9 @@ Recommended invocation payload:
 - Objective
 - Working directory
 - Validation commands
-- Progress scope (`--progress-scope`) for meaningful edit detection
-- Codex binary/path (`--codex-bin`) for deterministic runtime selection
-- Event stream format (`--events-format <tsv|jsonl|both>`, default `both`)
-- Progress artifact toggle (`--progress-artifact`) for per-iteration files
-- Runtime caps (`max-iterations`, `max-stagnant-iterations`, timeout settings)
+- Progress scope (`--progress-scope`) when the task is narrow or high risk
+- Runtime caps (`max-iterations`, `max-stagnant-iterations`, timeout settings) when the run needs them
+- Advanced options such as `--codex-bin`, `--events-format`, or `--progress-artifact` only when the environment or observability needs justify them
 - Completion promise only if compatibility mode is needed (deprecated)
 
 ## Loop Inputs
@@ -34,7 +43,6 @@ Under `<cwd>/.codex/ralph-loop/` maintain:
   --events-format both \
   --progress-artifact \
   --source-of-truth docs/tasks/task.md \
-  --completion-promise "DONE" \
   --max-iterations 40 \
   --max-stagnant-iterations 6 \
   --progress-scope "src/" \
