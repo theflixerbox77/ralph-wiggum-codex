@@ -75,6 +75,13 @@ That means:
 - the chat response confirms completion and points Ralph at that saved file
 - optional model/flag suggestions only appear when they materially improve the eventual Ralph run
 
+When the prompt is being prepared for `$ralph-wiggum-codex`, the production-ready prompt file should be organized around:
+- `Objective`
+- `Acceptance Criteria`
+- `Source of Truth`
+- `Optional Verification`
+- `Blocker Policy`
+
 ## Example Flow
 
 ### Example input

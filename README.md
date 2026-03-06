@@ -1,16 +1,14 @@
 # Ralph Wiggum Codex Skills
 
-Ralph-style long-running autonomous refinement for Codex, packaged as installable skills.
+Objective-first Ralph-style autonomous loops for Codex, packaged as installable skills.
 
-`ralph-wiggum-codex` is a Codex skill for iterative coding loops that continuously refine work until validation passes and completion criteria are met.
-
-Primary use: point Ralph at a repo, give it a concrete objective, and give it at least one validation command. Everything else is optional guardrail tuning.
+`ralph-wiggum-codex` is a Codex skill for long-running task completion that keeps the user request and acceptance criteria at the center, runs a mandatory work/review loop, and uses optional verification as evidence instead of as the whole task.
 
 ## Repo Contents
 
 This repo ships two Codex skills, not two plugins:
 
-- `ralph-wiggum-codex`: the long-running implement -> validate -> refine loop
+- `ralph-wiggum-codex`: the objective-first execution loop
 - `ralph-prompt-generator`: the staged prompt-improver companion that saves planning, draft, and final prompt files before handing off to Ralph
 
 ## What This Is
@@ -18,18 +16,17 @@ This repo ships two Codex skills, not two plugins:
 This repo is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a Codex-native skill package with:
 - `SKILL.md` instructions for each skill
 - optional `agents/openai.yaml` metadata and invocation policy for each skill
-- a deterministic loop runner script used by `ralph-wiggum-codex` for reliable long runs
+- a single monolithic loop runner script that powers `ralph-wiggum-codex`
 
 ## Core Capabilities
 
-- Multi-iteration implement -> validate -> refine loops
-- Deterministic completion via `codex exec --output-schema`
-- Dynamic objective reloading (`--objective-file`)
-- Live steering feedback reloading (`--feedback-file`)
-- Auto corrective feedback generation on failures
-- Iteration memory (`iteration-history.md`) fed back into future iterations
-- Stagnation detection (`--max-stagnant-iterations`)
-- Scoped progress gating (`--progress-scope`) to block no-op iterations
+- Mandatory work/review loop with fresh context each phase
+- Objective and acceptance-criteria reloading from repo-backed files
+- Optional verification commands used as evidence, not as the product definition of success
+- Explicit blocked handling with `RALPH-BLOCKED.md`
+- Review-driven shipping via `review-result.txt`
+- Iteration memory (`iteration-history.md`) fed into future work phases
+- Scoped progress gating (`--progress-scope`) to block fake no-op completion
 - Deterministic Codex runtime selection (`--codex-bin <path-or-name>`)
 - Configurable event artifact formats (`--events-format <tsv|jsonl|both>`, default `both`)
 - Optional per-iteration progress artifacts (`--progress-artifact`)
@@ -42,7 +39,8 @@ This repo also includes `ralph-prompt-generator`, a companion skill that turns r
 
 Use the companion when:
 - The objective is ambiguous or underspecified.
-- You want critique, revision, and explicit review checkpoints before starting a long run.
+- Acceptance criteria need to be derived and tightened before starting the loop.
+- You want critique, revision, and explicit review checkpoints before execution.
 - You want a saved production-ready prompt file rather than an inline flags-first handoff.
 
 Example input:
@@ -63,19 +61,17 @@ Workflow shape:
 
 Relationship to `ralph-wiggum-codex`:
 - `ralph-prompt-generator` improves the prompt itself and saves the review artifacts.
-- `ralph-wiggum-codex` runs the autonomous refinement loop.
+- `ralph-wiggum-codex` executes the autonomous work/review loop.
 
 ## Install
 
-### Option 1: Install the loop skill (recommended)
+### Option 1: Install the loop skill
 
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
   --repo MattMagg/ralph-wiggum-codex \
   --path skills/ralph-wiggum-codex
 ```
-
-Restart Codex after install.
 
 ### Option 2: Install the prompt-improver companion
 
@@ -84,8 +80,6 @@ python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-githu
   --repo MattMagg/ralph-wiggum-codex \
   --path skills/ralph-prompt-generator
 ```
-
-Restart Codex after install.
 
 ### Option 3: Manual install one or both skills
 
@@ -97,27 +91,38 @@ cp -R skills/ralph-prompt-generator ~/.codex/skills/
 
 Restart Codex after install.
 
-## Use It As A Skill (Primary)
+## Use It As A Skill
 
 Call the skill directly:
 
 ```text
 $ralph-wiggum-codex
 Run this in /path/to/repo.
-Objective: implement X with tests.
-Validation:
+Objective: implement X cleanly.
+Acceptance criteria:
+- the user-visible behavior works
+- the change is ready to ship
+Optional verification:
 - npm run test
 ```
 
-The skill will set up and run the loop under `.codex/ralph-loop/`.
+The skill should materialize and maintain these first-class state files under `.codex/ralph-loop/`:
+- `objective.md`
+- `acceptance-criteria.md`
+- `feedback.md`
+- `work-summary.md`
+- `review-feedback.md`
+- `review-result.txt`
+- `RALPH-BLOCKED.md`
+- `.ralph-complete`
 
 ## Advanced: Run The Engine Script Directly
 
 ```bash
 ~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
   --cwd /path/to/repo \
-  --codex-bin codex \
   --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
+  --acceptance-file /path/to/repo/.codex/ralph-loop/acceptance-criteria.md \
   --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
   --max-iterations 40 \
   --max-stagnant-iterations 6 \
@@ -129,52 +134,55 @@ The skill will set up and run the loop under `.codex/ralph-loop/`.
   --validate-cmd "npm run test"
 ```
 
-`--completion-promise` is still supported for compatibility but deprecated. Most users should leave it unset.
+The direct runner is still supported, but the primary UX is the Codex app skill.
 
-Resume:
+## Work/Review Contracts
 
-```bash
-~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
-  --cwd /path/to/repo \
-  --resume
-```
+Each iteration runs:
+1. a work phase
+2. optional verification
+3. a fresh-context review phase
 
-Stop:
-
-```bash
-touch /path/to/repo/.codex/ralph-loop/STOP
-```
-
-## Final Message JSON Contract
-
-Each iteration asks Codex to emit exactly one JSON object conforming to `.codex/ralph-loop/completion-schema.json`.
-
-Required fields:
-- `status`: `IN_PROGRESS`, `BLOCKED`, or `COMPLETE`
-- `evidence`: non-empty array of concrete command/result evidence
+Work schema (`work-schema.json`):
+- `status`: `IN_PROGRESS`, `BLOCKED`, `COMPLETE`
+- `assessment`: concise statement of progress against the objective and acceptance criteria
+- `evidence`: non-empty array of concrete evidence
 - `next_step`: one highest-impact next step
+- `blocker_reason` (optional, required when `status=BLOCKED`)
+- `no_change_justification` (optional)
 
-Optional fields:
-- `no_change_justification`: include when no scoped files changed and the iteration is legitimately a no-op
-- `completion_promise`: include only when `--completion-promise` is set
+Review schema (`review-schema.json`):
+- `decision`: `SHIP`, `REVISE`, `BLOCKED`
+- `assessment`: concise review judgment
+- `feedback`: actionable reviewer guidance or ship confirmation
+- `evidence`: non-empty array of concrete evidence
+
+The task is complete only when:
+- the work phase reports `COMPLETE`
+- the review phase decides `SHIP`
+- configured optional verification passes
+- the progress gate passes, or the no-change claim is explicitly justified
 
 ## Run Artifacts
 
 - `.codex/ralph-loop/state.env`
-- `.codex/ralph-loop/events.log`
-- `.codex/ralph-loop/events.jsonl` (when `--events-format jsonl|both`; default `both`)
-- `.codex/ralph-loop/completion-schema.json`
-- `.codex/ralph-loop/iteration-history.md`
+- `.codex/ralph-loop/objective.md`
+- `.codex/ralph-loop/acceptance-criteria.md`
 - `.codex/ralph-loop/feedback.md`
+- `.codex/ralph-loop/work-summary.md`
+- `.codex/ralph-loop/review-feedback.md`
+- `.codex/ralph-loop/review-result.txt`
+- `.codex/ralph-loop/RALPH-BLOCKED.md`
+- `.codex/ralph-loop/.ralph-complete`
+- `.codex/ralph-loop/work-schema.json`
+- `.codex/ralph-loop/review-schema.json`
+- `.codex/ralph-loop/iteration-history.md`
 - `.codex/ralph-loop/auto-feedback.md`
-- `.codex/ralph-loop/last-message.txt`
 - `.codex/ralph-loop/run-summary.md`
 - `.codex/ralph-loop/progress/` (when `--progress-artifact` is enabled)
 - `.codex/ralph-loop/validation/`
-- `.codex/ralph-loop/codex/iteration-<n>-attempt-<m>.jsonl`
+- `.codex/ralph-loop/codex/iteration-<n>-<phase>-attempt-<m>.jsonl`
 - `.codex/ralph-loop/.lock/meta.env` (while active)
-
-`events.log` remains the compatible/default-friendly artifact for existing tooling; `events.jsonl` is additive.
 
 ## Repo Structure
 
@@ -183,25 +191,19 @@ skills/ralph-prompt-generator/
   SKILL.md
   agents/openai.yaml
   references/
-    prompt-improver-principles.md
-    prompt-improver-workflow-codex.md
-    openai-codex-prompting-2026.md
-    ralph-flag-selection-matrix.md
 skills/ralph-wiggum-codex/
   SKILL.md
   agents/openai.yaml
   scripts/ralph-loop-codex.sh
   references/
-    harness-principles.md
-    runbook.md
-    reliability-vnext.md
 docs/
   configuration.md
   prompt-improver-spec/
-    README.md
-    artifacts/
-    final-prompts/
   ralph-prompt-generator.md
+tests/
+  smoke.sh
+  ralph_loop_contract.sh
+  prompt_generator_contract.sh
 ```
 
 ## CI
@@ -212,10 +214,10 @@ This repo runs:
 
 ## Docs
 
-- `docs/configuration.md`: complete flag reference and effective usage patterns for the runner.
-- `docs/ralph-prompt-generator.md`: staged prompt-improver workflow, checkpoints, and final prompt delivery pattern.
-- `docs/prompt-improver-spec/README.md`: workspace layout for prompt-improver artifacts, drafts, and final prompts.
-- `docs/releases.md`: release order, versioning policy, and why this repo uses GitHub Releases instead of GitHub Packages.
+- `docs/configuration.md`: runner configuration and objective-first operating model
+- `docs/ralph-prompt-generator.md`: staged prompt-improver workflow, checkpoints, and final prompt delivery pattern
+- `docs/prompt-improver-spec/README.md`: workspace layout for prompt-improver artifacts, drafts, and final prompts
+- `docs/releases.md`: release order, versioning policy, and why this repo uses GitHub Releases instead of GitHub Packages
 
 ## Releases
 
@@ -237,7 +239,7 @@ GitHub Packages is not currently applicable because this repo does not publish a
 
 ## Search Keywords
 
-Codex skill, autonomous coding loop, iterative coding agent, long-running coding workflow, agentic refinement loop, Ralph loop Codex, coding harness.
+Codex skill, autonomous coding loop, objective-first agent loop, work review loop, long-running coding workflow, Ralph loop Codex, coding harness.
 
 ## License
 

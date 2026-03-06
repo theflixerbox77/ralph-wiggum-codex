@@ -26,6 +26,16 @@ fail() {
   printf '[FAIL] %s\n' "$1" >&2
 }
 
+contains_fixed() {
+  local pattern="$1"
+  local file_path="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -q --fixed-strings -- "$pattern" "$file_path"
+  else
+    grep -Fq -- "$pattern" "$file_path"
+  fi
+}
+
 expect_file() {
   local name="$1"
   local file_path="$2"
@@ -40,7 +50,7 @@ expect_contains() {
   local name="$1"
   local pattern="$2"
   local file_path="$3"
-  if rg -q --fixed-strings "$pattern" "$file_path"; then
+  if contains_fixed "$pattern" "$file_path"; then
     pass "$name"
   else
     fail "$name"
@@ -51,7 +61,7 @@ expect_not_contains() {
   local name="$1"
   local pattern="$2"
   local file_path="$3"
-  if rg -q --fixed-strings "$pattern" "$file_path"; then
+  if contains_fixed "$pattern" "$file_path"; then
     fail "$name"
   else
     pass "$name"
@@ -88,6 +98,9 @@ expect_contains "skill references task artifact" "docs/prompt-improver-spec/arti
 expect_contains "skill references walkthrough artifact" "docs/prompt-improver-spec/artifacts/walkthrough.md" "$SKILL_FILE"
 expect_contains "skill requires draft deletion" "Delete the draft file" "$SKILL_FILE"
 expect_contains "skill final deliverable includes ralph snippet" "Ralph-ready invocation snippet" "$SKILL_FILE"
+expect_contains "skill final deliverable includes acceptance criteria section" "Acceptance Criteria" "$SKILL_FILE"
+expect_contains "skill final deliverable includes optional verification section" "Optional Verification" "$SKILL_FILE"
+expect_contains "skill final deliverable includes blocker policy section" "Blocker Policy" "$SKILL_FILE"
 expect_not_contains "skill no longer promises one fenced block" "output exactly one fenced markdown code block" "$SKILL_FILE"
 
 expect_contains "workflow reference maps task_boundary" "task_boundary" "$REFERENCE_FILE"
@@ -97,9 +110,12 @@ expect_contains "workflow reference covers final completion message" "All 6 Step
 
 expect_contains "docs describe staged workflow" "four-phase conversation model" "$DOC_FILE"
 expect_contains "docs describe prompt file plus snippet output" "prompt file plus short Ralph invocation snippet" "$DOC_FILE"
+expect_contains "docs describe acceptance criteria output" "Acceptance Criteria" "$DOC_FILE"
+expect_contains "docs describe blocker policy output" "Blocker Policy" "$DOC_FILE"
 expect_not_contains "docs no longer claim single fenced block" "Final output must be exactly one fenced markdown code block" "$DOC_FILE"
 expect_contains "readme references saved production-ready prompt file" "production-ready prompt file" "$README_FILE"
 expect_contains "metadata advertises staged workflow" "staged prompt-improvement workflow" "$META_FILE"
+expect_contains "metadata advertises new Ralph snippet target" 'production-ready prompt file for $ralph-wiggum-codex' "$META_FILE"
 
 printf '\nPrompt generator contract tests complete: %s passed, %s failed\n' "$pass_count" "$fail_count"
 

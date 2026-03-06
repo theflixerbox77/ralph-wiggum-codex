@@ -1,7 +1,7 @@
 interface:
   display_name: "Ralph Wiggum Codex"
-  short_description: "Long-running fix-and-validate loop for complex Codex tasks"
-  default_prompt: "Use $ralph-wiggum-codex to keep iterating on a coding task until the validations pass or the work is clearly blocked."
+  short_description: "Objective-first work/review loop for long-running Codex tasks"
+  default_prompt: "Use $ralph-wiggum-codex to keep iterating on a coding task until the task is complete or genuinely blocked, using acceptance criteria, fresh-context review, and optional verification as evidence."
 
 policy:
   allow_implicit_invocation: false

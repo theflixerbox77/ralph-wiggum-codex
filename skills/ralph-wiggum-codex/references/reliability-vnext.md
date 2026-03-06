@@ -1,139 +1,105 @@
 # Ralph Loop Reliability vNext
 
-This document explains the reliability guardrails implemented in the loop runner:
+This document explains the reliability guardrails implemented in
 `scripts/ralph-loop-codex.sh`.
-
-It is written for operators who want to understand why the loop stops, how it detects progress, and how to recover from hangs or stale state.
 
 ## Overview
 
-Each iteration runs:
+Each iteration now runs as a fresh-context work/review loop:
+1. build the work-phase prompt from `objective.md`, `acceptance-criteria.md`, source of truth, operator feedback, prior review feedback, and recent history
+2. run the work phase with `codex exec`
+3. run optional verification commands
+4. build a fresh-context review prompt from the current repo state, `work-summary.md`, and verification results
+5. run the review phase with `codex exec`
+6. decide whether to `SHIP`, `REVISE`, or confirm a real block
 
-1. Build an iteration prompt that includes: objective, validation commands, recent iteration memory, and operator feedback.
-2. Run `codex exec` with:
-   - deterministic runtime binary/path from `--codex-bin <path-or-name>`
-   - machine-readable event stream (`--json`) written to a per-attempt JSONL file
-   - final message written to `.codex/ralph-loop/last-message.txt`
-   - a JSON Schema contract (`--output-schema`) written to `.codex/ralph-loop/completion-schema.json`
-3. Run validation commands (if configured).
-4. Evaluate completion + progress gates.
+This keeps the loop monolithic while still giving the review pass fresh context.
 
-Run-level event artifacts are controlled by `--events-format <tsv|jsonl|both>` (default `both`):
-- `tsv` writes `.codex/ralph-loop/events.log`
-- `jsonl` writes `.codex/ralph-loop/events.jsonl`
-- `both` writes both artifacts
+## Machine-Readable Contracts
 
-`events.log` remains compatible for existing consumers.
+The runner writes:
+- `.codex/ralph-loop/work-schema.json`
+- `.codex/ralph-loop/review-schema.json`
 
-## Completion Contract (Schema-Based)
+Work contract:
+- `status`: `IN_PROGRESS`, `BLOCKED`, `COMPLETE`
+- `assessment`
+- `evidence`
+- `next_step`
+- optional `blocker_reason`
+- optional `no_change_justification`
 
-The runner requires the final assistant message to be exactly one JSON object matching `.codex/ralph-loop/completion-schema.json`.
+Review contract:
+- `decision`: `SHIP`, `REVISE`, `BLOCKED`
+- `assessment`
+- `feedback`
+- `evidence`
 
-Required fields:
-- `status`: `IN_PROGRESS`, `BLOCKED`, or `COMPLETE`
-- `evidence`: non-empty array of concrete evidence strings (prefer command/result pairs)
-- `next_step`: one highest-impact next step
+The key semantic stop reasons are:
+- `task_complete`
+- `task_blocked`
 
-Optional fields:
-- `no_change_justification`: include when no scoped progress is detected and the iteration is a justified no-op
-- `completion_promise`: include only when `--completion-promise` is configured and status is `COMPLETE`
+## Acceptance Criteria As Ship Gate
 
-The runner accepts completion only when:
-- `status` is `COMPLETE`
-- validations pass
-- the progress gate passes (or includes `no_change_justification`)
-- if `--completion-promise` is set: `completion_promise` equals the configured value
+The runner is objective-first:
+- work quality is judged against the objective plus acceptance criteria
+- optional verification is supporting evidence, not the whole task
+- the reviewer can only ship the task when the acceptance criteria are satisfied
 
-## Compatibility: `--completion-promise` (Deprecated)
+Shipping still requires:
+- work phase reported `COMPLETE`
+- review phase decided `SHIP`
+- configured verification passed
+- progress gate passed, or the no-change claim was justified
 
-`--completion-promise` is supported as a compatibility check but deprecated.
+## Fresh-Context Review
 
-Behavior:
-- the runner logs a deprecation warning/event when it is set
-- the completion check is performed against the `completion_promise` JSON field, not `<promise>...</promise>`
+The reviewer starts from fresh context every iteration and inspects:
+- the current repo state
+- `work-summary.md`
+- verification logs/results
+- the objective and acceptance criteria
 
-## Progress Gate (Scoped Diff / No-Op Prevention)
+By default the reviewer uses the same model/profile as the worker, but it is still a distinct fresh-context pass. `--review-model` and `--review-profile` allow explicit overrides.
 
-Problem this solves:
-- validations can be green while the iteration makes no meaningful edits
+## Blocked Handling
 
-The runner computes a scoped `git status --porcelain` hash before and after each `codex exec` call.
+The worker may report `BLOCKED`, but the loop only stops as `task_blocked` when the reviewer agrees the blocker is genuine and external.
 
-Configuration:
-- `--progress-scope <pathspec>` can be repeated
-- default is `.` (entire repo)
+If the reviewer thinks the task is still solvable inside the repo:
+- decision becomes `REVISE`
+- `review-feedback.md` captures the next direction
+- `RALPH-BLOCKED.md` is not left behind
 
-The gate passes when:
-- any scoped files changed, or
-- `no_change_justification` is provided in the schema output
+## Progress Gate
 
-The gate blocks completion when:
-- there is no scoped change and `no_change_justification` is empty
+The progress gate still computes a scoped git diff before and after the iteration.
 
-Note:
-- files under the runner state dir (`.codex/ralph-loop/`) are ignored for progress detection so that writing artifacts does not count as progress.
+Its job is narrow:
+- prevent fake “complete” claims with no scoped repo change
+- allow justified no-change completion when `no_change_justification` is explicit
+- avoid mistaking state-dir artifact writes for progress
 
-Optional observability:
-- `--progress-artifact` writes per-iteration progress artifacts under `.codex/ralph-loop/progress/` without affecting scoped progress gating.
+It is not the product’s definition of task success.
 
-## Watchdog Timeouts + Retry
+## Watchdog Timeouts And Retry
 
-Problem this solves:
-- hung or idle `codex exec` processes requiring manual intervention
+Both work and review phases run under the watchdog:
+- idle timeout: JSONL output stops changing for `--idle-timeout-seconds`
+- hard timeout: phase runtime exceeds `--hard-timeout-seconds`
 
-Per iteration, `codex exec` runs under a watchdog that can kill the process when:
-- idle timeout: JSONL output has not changed for `--idle-timeout-seconds`
-- hard timeout: total runtime exceeds `--hard-timeout-seconds`
-
-Defaults:
-- `--idle-timeout-seconds 900`
-- `--hard-timeout-seconds 7200`
-- `--timeout-retries 1` (retries only timeout-killed attempts)
+Timeout-killed phases can retry up to `--timeout-retries` times.
 
 Artifacts:
-- `.codex/ralph-loop/codex/iteration-<n>-attempt-<m>.jsonl`
-- `.codex/ralph-loop/codex/iteration-<n>-attempt-<m>.stderr.log`
-
-## Locking + Stale Lock Recovery
-
-The runner enforces a single active loop using a lock directory:
-- `.codex/ralph-loop/.lock/`
-
-Metadata written to `.lock/meta.env` includes:
-- `PID`, `RUN_ID`, `STARTED_AT`, and `CWD`
-
-Startup behavior:
-- if lock exists and metadata PID is alive: the runner exits (another loop is active)
-- if lock exists and metadata PID is dead: the runner auto-reclaims the lock
-- if lock exists but metadata is missing/corrupt: the runner exits unless `--reclaim-stale-lock` is set
+- `.codex/ralph-loop/codex/iteration-<n>-work-attempt-<m>.jsonl`
+- `.codex/ralph-loop/codex/iteration-<n>-review-attempt-<m>.jsonl`
 
 ## Stop Reasons
 
-The runner writes stop reasons to `.codex/ralph-loop/run-summary.md` and logs events to `.codex/ralph-loop/events.log`.
-
 Common stop reasons:
-- `schema_completion_detected`
+- `task_complete`
+- `task_blocked`
 - `max_iterations_reached`
 - `max_consecutive_failures_reached`
 - `max_stagnant_iterations_reached`
 - `stop_file_detected`
-
-## Example Invocation With New Runner Options
-
-```bash
-~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
-  --cwd /repo \
-  --codex-bin codex \
-  --objective-file /repo/.codex/ralph-loop/objective.md \
-  --feedback-file /repo/.codex/ralph-loop/feedback.md \
-  --events-format both \
-  --progress-artifact \
-  --max-iterations 40 \
-  --validate-cmd "npm run test"
-```
-
-## Operational Tips
-
-- If the loop is making no progress: add concrete guidance to `.codex/ralph-loop/feedback.md` and resume.
-- If the lock is stuck: prefer `--reclaim-stale-lock` over deleting directories by hand (keeps behavior explicit and logged).
-- If you need to reduce thrashing: use `--sleep-seconds`.

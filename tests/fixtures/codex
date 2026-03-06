@@ -28,6 +28,7 @@ cwd=""
 output_last_message=""
 output_schema=""
 prompt=""
+phase="work"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -70,6 +71,13 @@ write_last_message() {
   fi
 }
 
+save_prompt() {
+  local phase_name="$1"
+  if [[ -n "$prompt" ]]; then
+    printf '%s\n' "$prompt" > "$state_dir/call-${call_count}-${phase_name}-prompt.txt"
+  fi
+}
+
 validate_written_message() {
   if [[ -z "$output_last_message" || -z "$output_schema" ]]; then
     return 0
@@ -105,39 +113,90 @@ emit_json_event() {
   printf '{"type":"item.completed","item":{"type":"agent_message","text":%q}}\n' "$text"
 }
 
-completion_promise_value="${CODEX_STUB_COMPLETION_PROMISE:-DONE}"
+if [[ "$prompt" == *"Ralph Review Phase"* ]]; then
+  phase="review"
+fi
+
+save_prompt "$phase"
 
 case "$scenario" in
-  schema_complete_change)
-    emit_json_event "complete"
-    touch_progress_file
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"implemented change\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
+  review_ship_complete)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review ship"
+      write_last_message "{\"decision\":\"SHIP\",\"assessment\":\"The objective and acceptance criteria are satisfied.\",\"feedback\":\"Ready to ship.\",\"evidence\":[\"worker summary matches the requested outcome\"]}"
+    else
+      emit_json_event "work complete"
+      touch_progress_file
+      write_last_message "{\"status\":\"COMPLETE\",\"assessment\":\"Implemented the requested change and aligned it with the acceptance criteria.\",\"evidence\":[\"implemented change in repo\"],\"next_step\":\"Await review decision\"}"
+    fi
     validate_written_message
     exit 0
     ;;
-  schema_complete_change_minimal)
-    emit_json_event "complete minimal"
-    touch_progress_file
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"implemented change\"],\"next_step\":\"NONE\"}"
+  review_revise_complete)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review revise"
+      write_last_message "{\"decision\":\"REVISE\",\"assessment\":\"The work is close but does not fully satisfy the acceptance criteria.\",\"feedback\":\"Tighten the implementation and address the remaining gap before shipping.\",\"evidence\":[\"review found an unresolved gap\"]}"
+    else
+      emit_json_event "work complete for revise"
+      touch_progress_file
+      write_last_message "{\"status\":\"COMPLETE\",\"assessment\":\"Made meaningful progress but likely needs another pass.\",\"evidence\":[\"partial implementation completed\"],\"next_step\":\"Address review feedback\"}"
+    fi
     validate_written_message
     exit 0
     ;;
-  schema_complete_nochange)
-    emit_json_event "complete without change"
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"reviewed constraints\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
+  blocked_confirmed)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review blocked"
+      write_last_message "{\"decision\":\"BLOCKED\",\"assessment\":\"The worker is genuinely blocked by an external dependency.\",\"feedback\":\"Needs an external input before the task can continue.\",\"evidence\":[\"worker provided a concrete external blocker\"]}"
+    else
+      emit_json_event "work blocked"
+      write_last_message "{\"status\":\"BLOCKED\",\"assessment\":\"Cannot continue because a required external dependency is missing.\",\"evidence\":[\"missing external dependency\"],\"next_step\":\"Wait for the missing dependency\",\"blocker_reason\":\"External dependency is unavailable\"}"
+    fi
     validate_written_message
     exit 0
     ;;
-  schema_complete_nochange_justified)
-    emit_json_event "complete with no-change justification"
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"no edits required\"],\"next_step\":\"NONE\",\"no_change_justification\":\"Repository already satisfied objective\",\"completion_promise\":\"$completion_promise_value\"}"
+  blocked_revised)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review rejects blocker"
+      write_last_message "{\"decision\":\"REVISE\",\"assessment\":\"The blocker is not genuine because the task is still solvable within the repo.\",\"feedback\":\"Continue working inside the existing repo context instead of stopping.\",\"evidence\":[\"reviewer found an internal path forward\"]}"
+    else
+      emit_json_event "work blocked but revisable"
+      write_last_message "{\"status\":\"BLOCKED\",\"assessment\":\"I think I am blocked, but this may still be solvable.\",\"evidence\":[\"uncertain internal blocker\"],\"next_step\":\"Re-check the repo and continue\",\"blocker_reason\":\"Thought there was no path forward\"}"
+    fi
     validate_written_message
     exit 0
     ;;
-  schema_in_progress)
-    emit_json_event "in progress"
-    touch_progress_file
-    write_last_message "{\"status\":\"IN_PROGRESS\",\"evidence\":[\"partial implementation\"],\"next_step\":\"Finish tests\",\"no_change_justification\":\"\",\"completion_promise\":\"\"}"
+  review_ship_nochange)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review ship nochange"
+      write_last_message "{\"decision\":\"SHIP\",\"assessment\":\"The task appears complete from a semantic standpoint.\",\"feedback\":\"Ready to ship if the no-change claim is justified.\",\"evidence\":[\"review saw no additional changes needed\"]}"
+    else
+      emit_json_event "work complete without change"
+      write_last_message "{\"status\":\"COMPLETE\",\"assessment\":\"The repository already satisfies the objective.\",\"evidence\":[\"reviewed the existing code\"],\"next_step\":\"Await review decision\"}"
+    fi
+    validate_written_message
+    exit 0
+    ;;
+  review_ship_nochange_justified)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review ship justified nochange"
+      write_last_message "{\"decision\":\"SHIP\",\"assessment\":\"The no-change claim is justified and the acceptance criteria are already satisfied.\",\"feedback\":\"Ready to ship.\",\"evidence\":[\"existing repo state satisfies the task\"]}"
+    else
+      emit_json_event "work complete justified nochange"
+      write_last_message "{\"status\":\"COMPLETE\",\"assessment\":\"The repository already satisfies the objective.\",\"evidence\":[\"reviewed the existing code\"],\"next_step\":\"Await review decision\",\"no_change_justification\":\"Repository already satisfied objective\"}"
+    fi
+    validate_written_message
+    exit 0
+    ;;
+  work_in_progress)
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review revise in progress"
+      write_last_message "{\"decision\":\"REVISE\",\"assessment\":\"The task is still in progress.\",\"feedback\":\"Continue with the next planned step.\",\"evidence\":[\"worker did not claim completion\"]}"
+    else
+      emit_json_event "work in progress"
+      touch_progress_file
+      write_last_message "{\"status\":\"IN_PROGRESS\",\"assessment\":\"Made partial progress against the objective.\",\"evidence\":[\"partial implementation\"],\"next_step\":\"Finish the remaining work\"}"
+    fi
     validate_written_message
     exit 0
     ;;
@@ -150,14 +209,24 @@ case "$scenario" in
     sleep "${CODEX_STUB_TIMEOUT_SLEEP:-30}"
     exit 0
     ;;
-  timeout_then_complete)
+  timeout_then_ship)
     if [[ "$call_count" -eq 1 ]]; then
       sleep "${CODEX_STUB_TIMEOUT_SLEEP:-30}"
       exit 0
     fi
-    emit_json_event "complete after retry"
-    touch_progress_file
-    write_last_message "{\"status\":\"COMPLETE\",\"evidence\":[\"retried and completed\"],\"next_step\":\"NONE\",\"no_change_justification\":\"\",\"completion_promise\":\"$completion_promise_value\"}"
+    if [[ "$phase" == "review" ]]; then
+      emit_json_event "review ship after retry"
+      write_last_message "{\"decision\":\"SHIP\",\"assessment\":\"The retried work satisfies the task.\",\"feedback\":\"Ready to ship.\",\"evidence\":[\"review confirmed the retried work\"]}"
+    else
+      emit_json_event "work complete after retry"
+      touch_progress_file
+      write_last_message "{\"status\":\"COMPLETE\",\"assessment\":\"Retried the task and completed it successfully.\",\"evidence\":[\"retried and completed\"],\"next_step\":\"Await review decision\"}"
+    fi
+    validate_written_message
+    exit 0
+    ;;
+  legacy_schema_complete_change|schema_complete_change|schema_complete_change_minimal|schema_complete_nochange|schema_complete_nochange_justified|schema_in_progress|timeout_then_complete)
+    echo "Legacy CODEX_STUB_SCENARIO is no longer supported: $scenario" >&2
     exit 0
     ;;
   *)

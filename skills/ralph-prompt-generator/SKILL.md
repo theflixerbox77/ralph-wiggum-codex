@@ -146,6 +146,7 @@ Final delivery must include:
 - the saved final prompt path
 - confirmation that the draft file was removed
 - a short Ralph-ready invocation snippet that points to the saved final prompt file
+- a final prompt structure that clearly covers `Objective`, `Acceptance Criteria`, `Source of Truth`, `Optional Verification`, and `Blocker Policy`
 
 ## Ralph-Specific Tailoring Is Secondary
 
@@ -155,6 +156,13 @@ After the prompt itself is finished, add only a small Ralph-specific wrapper:
 - optional flags only when they materially improve the run
 
 The final deliverable is a production-ready prompt file plus a Ralph-ready invocation snippet, not a flags-first handoff block.
+
+When the improved prompt is intended for `$ralph-wiggum-codex`, the prompt itself should normally include these sections:
+- `Objective`
+- `Acceptance Criteria`
+- `Source of Truth`
+- `Optional Verification`
+- `Blocker Policy`
 
 ## Non-Negotiable Constraints
 

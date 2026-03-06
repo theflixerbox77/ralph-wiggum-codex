@@ -1,43 +1,34 @@
 # Harness Principles Applied In This Skill
 
-This skill applies harness-engineering principles to long-running Codex work.
+This skill applies Ralph-loop harness principles to long-running Codex work.
 
-## 1) Repository Is The System Of Record
+## 1) Repository Files Are The System Of Record
 
-- Objective and feedback live in repo-local files (`objective.md`, `feedback.md`).
-- Optional `--source-of-truth` artifacts anchor behavior to explicit references.
+- Objective, acceptance criteria, and feedback live in repo-local files.
+- Work/review handoff persists through files, not chat accumulation.
+- Optional `--source-of-truth` artifacts anchor the loop to explicit requirements.
 
-## 2) Legibility Over Guessing
+## 2) Fresh Context Beats Accumulated Noise
 
-- Deterministic run artifacts: `state.env`, `events.log`, `run-summary.md`.
-- Deterministic runtime selection via `--codex-bin <path-or-name>`.
-- Event artifacts are format-selectable with `--events-format <tsv|jsonl|both>` (default `both`).
-- `events.log` remains compatible for existing tooling; `events.jsonl` is additive.
-- Machine-readable completion schema: `completion-schema.json`.
-- Per-attempt codex event logs: `codex/iteration-<n>-attempt-<m>.jsonl`.
-- Optional per-iteration progress snapshots via `--progress-artifact` under `.codex/ralph-loop/progress/`.
-- Iteration memory (`iteration-history.md`) captures recent outcomes and model output tails.
-- Validation logs are written per iteration.
+- Every work phase starts fresh.
+- Every review phase starts fresh.
+- `iteration-history.md` is a compact memory aid, not the primary source of truth.
 
-## 3) Fast Feedback Loops
+## 3) Acceptance Criteria Drive Completion
 
-Preferred loop order:
+- The task is shipped against the objective plus acceptance criteria.
+- Optional verification is supporting evidence.
+- The reviewer decides `SHIP`, `REVISE`, or `BLOCKED`.
 
-1. Preflight checks (`--preflight-cmd`)
-2. Iteration validation (`--validate-cmd`)
-3. Adaptive steering via `feedback.md` and `auto-feedback.md`
+## 4) Reliability Guardrails Stay Mechanical
 
-## 4) Enforce Invariants Without Micromanagement
+- File-backed state and resume support keep long runs recoverable.
+- Machine-readable schemas keep phase outputs legible.
+- Scoped progress gates prevent fake no-op completion.
+- Watchdog timeouts and retries prevent hung phases from stalling the loop forever.
 
-- Completion is schema-driven (`status=COMPLETE`) with compatibility promise checks when configured.
-- Completion is rejected if validation fails.
-- Single active loop via lock directory with stale lock auto-reclaim for dead PID metadata.
-- Scoped progress gate blocks no-op iterations unless `no_change_justification` is provided.
-- Stagnation guard ends repeated no-progress cycles.
+## 5) Blocked Handling Must Be Explicit
 
-## 5) Entropy Control For Long Runs
-
-- Resumable state avoids ad-hoc restarts.
-- Objective and feedback reloading allow controlled mid-run adaptation.
-- Auto feedback surfaces failure patterns to improve subsequent iterations.
-- Watchdog timeouts and retries prevent indefinite hangs from `codex exec`.
+- A worker blocker claim is not enough by itself.
+- The reviewer confirms whether the blocker is real and external.
+- Confirmed blockers stop as `task_blocked` with `RALPH-BLOCKED.md`.
